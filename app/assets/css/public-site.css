@@ -1,0 +1,79 @@
+/* Public Diamond Tennis website tokens are deliberately scoped so the
+ * administration dashboard keeps its existing Nuxt UI theme. */
+.public-site {
+  --page-bg: #F4F6EF;
+  --ink: #0A1714;
+  --forest: #123D33;
+  --lime: #D8FF3E;
+  --coral: #FF7047;
+  --muted: #64716C;
+  --line: rgba(10, 23, 20, 0.12);
+  --public-container: 1240px;
+  --container: var(--public-container);
+
+  min-height: 100dvh;
+  overflow-x: clip;
+  background: var(--page-bg);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+.public-site *,
+.public-site *::before,
+.public-site *::after {
+  box-sizing: border-box;
+}
+
+.public-site ::selection {
+  background: var(--lime);
+  color: var(--ink);
+}
+
+.public-site img {
+  max-width: 100%;
+}
+
+.public-site button,
+.public-site a,
+.public-site input {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.public-site :focus-visible {
+  outline: 3px solid rgba(255, 112, 71, 0.62);
+  outline-offset: 3px;
+}
+
+/* Explicit public CTA style. This remains scoped to the public website and
+ * does not alter Nuxt UI buttons inside the protected dashboard. */
+.public-site .public-lime-button {
+  border-color: var(--lime) !important;
+  background: var(--lime) !important;
+  color: var(--ink) !important;
+}
+
+.public-site .public-lime-button * {
+  color: var(--ink) !important;
+}
+
+.public-site .site-footer__cta {
+  display: inline-flex !important;
+  margin-top: 32px !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .public-site {
+    scroll-behavior: auto;
+  }
+
+  .public-site *,
+  .public-site *::before,
+  .public-site *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

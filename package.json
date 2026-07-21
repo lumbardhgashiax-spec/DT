@@ -1,0 +1,29 @@
+{
+  "name": "diamond_tenis_academy",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "nuxt build",
+    "dev": "nuxt dev",
+    "preview": "nuxt preview",
+    "postinstall": "nuxt prepare",
+    "lint": "eslint .",
+    "typecheck": "nuxt typecheck"
+  },
+  "dependencies": {
+    "@iconify-json/lucide": "^1.2.117",
+    "@iconify-json/simple-icons": "^1.2.91",
+    "@internationalized/date": "^3.12.2",
+    "@nuxt/ui": "^4.10.0",
+    "@nuxtjs/supabase": "2.0.9",
+    "@unhead/vue": "^3.2.1",
+    "nuxt": "^4.5.0",
+    "tailwindcss": "^4.3.2"
+  },
+  "devDependencies": {
+    "@nuxt/eslint": "^1.16.0",
+    "eslint": "^10.7.0",
+    "typescript": "^6.0.3",
+    "vue-tsc": "^3.3.7"
+  }
+}
