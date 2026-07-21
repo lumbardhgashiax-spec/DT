@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { getPaginationRowModel } from '@tanstack/vue-table'
+import type { TableColumn } from '@nuxt/ui'
+import { h, resolveComponent } from 'vue'
 import type { TableRow, UserRole } from '~/types/database.types'
 
 definePageMeta({ layout: 'dashboard' })
@@ -15,6 +18,7 @@ const deleteOpen = ref(false)
 const saving = ref(false)
 const selectedProfile = ref<TableRow<'profiles'> | null>(null)
 const profileToDelete = ref<TableRow<'profiles'> | null>(null)
+const pagination = ref({ pageIndex: 0, pageSize: 10 })
 
 const form = reactive({
   full_name: '',
@@ -27,8 +31,8 @@ const form = reactive({
 
 const roleOptions = [
   { label: 'Staf', value: 'staff' },
-  { label: 'admin', value: 'admin' },
-  { label: 'superadmin', value: 'superadmin' }
+  { label: 'Admin', value: 'admin' },
+  { label: 'Superadmin', value: 'superadmin' }
 ]
 const roleLabels: Record<UserRole, string> = { staff: 'Staf', admin: 'Administrator', superadmin: 'Superadmin' }
 
@@ -42,11 +46,20 @@ const filteredProfiles = computed(() => {
   return (profiles.value || []).filter(item => `${item.full_name} ${item.email || ''} ${item.phone || ''}`.toLowerCase().includes(query))
 })
 
+watch(search, () => {
+  pagination.value.pageIndex = 0
+})
+
 const staffStats = computed(() => ({
   total: profiles.value?.length || 0,
   active: profiles.value?.filter(item => item.is_active).length || 0,
   admins: profiles.value?.filter(item => item.role !== 'staff').length || 0
 }))
+
+const UAvatar = resolveComponent('UAvatar')
+const UBadge = resolveComponent('UBadge')
+const UButton = resolveComponent('UButton')
+const UTooltip = resolveComponent('UTooltip')
 
 function resetForm() {
   form.full_name = ''
@@ -85,7 +98,7 @@ function errorMessage(error: unknown) {
 async function saveProfile() {
   if (!isSuperAdmin.value || saving.value) return
   if (!form.full_name.trim() || !form.email.trim() || (!selectedProfile.value && form.password.length < 8)) {
-    toast.add({ title: 'Plotëso fushat e detyrueshme', description: 'Për llogari të reja fjalëkalimi duhet të ketë së paku 8 karaktere.', color: 'warning' })
+    toast.add({ title: 'Ploteso fushat e detyrueshme', description: 'Per llogari te reja fjalekalimi duhet te kete se paku 8 karaktere.', color: 'warning' })
     return
   }
 
@@ -97,11 +110,11 @@ async function saveProfile() {
     } else {
       await dashboardApi.createStaff(payload)
     }
-    toast.add({ title: selectedProfile.value ? 'Stafi u përditësua' : 'Llogaria e stafit u krijua', color: 'success' })
+    toast.add({ title: selectedProfile.value ? 'Stafi u perditesua' : 'Llogaria e stafit u krijua', color: 'success' })
     formOpen.value = false
     await refresh()
   } catch (error) {
-    toast.add({ title: 'Veprimi dështoi', description: errorMessage(error), color: 'error' })
+    toast.add({ title: 'Veprimi deshtoi', description: errorMessage(error), color: 'error' })
   } finally {
     saving.value = false
   }
@@ -117,7 +130,7 @@ async function deleteProfile() {
   saving.value = true
   try {
     await dashboardApi.deleteStaff(profileToDelete.value.id)
-    toast.add({ title: 'Llogaria u fshi', description: 'Përdoruesi u largua nga Auth dhe dashboard-i.', color: 'success' })
+    toast.add({ title: 'Llogaria u fshi', description: 'Perdoruesi u largua nga Auth dhe dashboard-i.', color: 'success' })
     deleteOpen.value = false
     await refresh()
   } catch (error) {
@@ -126,6 +139,53 @@ async function deleteProfile() {
     saving.value = false
   }
 }
+
+const columns: TableColumn<TableRow<'profiles'>>[] = [
+  {
+    accessorKey: 'full_name',
+    header: 'Stafi',
+    cell: ({ row }) => h('div', { class: 'flex min-w-0 items-center gap-3' }, [
+      h(UAvatar, { text: row.original.full_name.charAt(0).toUpperCase(), class: 'shrink-0 bg-[#062660] font-bold text-white' }),
+      h('div', { class: 'min-w-0' }, [
+        h('p', { class: 'font-medium text-highlighted truncate' }, row.original.full_name),
+        h('p', { class: 'text-xs text-muted truncate' }, `${row.original.email || ''}${row.original.phone ? ` - ${row.original.phone}` : ''}`)
+      ])
+    ])
+  },
+  {
+    accessorKey: 'role',
+    header: 'Roli',
+    cell: ({ row }) => h(UBadge, { color: 'neutral', variant: 'subtle' }, () => roleLabels[row.original.role])
+  },
+  {
+    accessorKey: 'is_active',
+    header: 'Statusi',
+    cell: ({ row }) => h(UBadge, { color: row.original.is_active ? 'success' : 'error', variant: 'subtle' }, () => row.original.is_active ? 'Aktiv' : 'Joaktiv')
+  },
+  {
+    id: 'actions',
+    header: '',
+    meta: { class: { th: 'w-24', td: 'text-right' } },
+    cell: ({ row }) => h('div', { class: 'flex justify-end gap-1' }, [
+      h(UTooltip, { text: 'Ndrysho' }, () => h(UButton, {
+        'color': 'neutral',
+        'variant': 'ghost',
+        'icon': 'i-lucide-pencil',
+        'aria-label': 'Ndrysho stafin',
+        'disabled': !isSuperAdmin.value,
+        'onClick': () => openEdit(row.original)
+      })),
+      h(UTooltip, { text: 'Fshi' }, () => h(UButton, {
+        'color': 'error',
+        'variant': 'ghost',
+        'icon': 'i-lucide-trash-2',
+        'aria-label': 'Fshi stafin',
+        'disabled': !isSuperAdmin.value || row.original.id === currentProfile.value?.id,
+        'onClick': () => askDelete(row.original)
+      }))
+    ])
+  }
+]
 </script>
 
 <template>
@@ -139,7 +199,7 @@ async function deleteProfile() {
           Stafi dhe rolet
         </h1>
         <p class="dashboard-page-description">
-          Krijo llogari, përditëso të dhënat, rolet dhe qasjen e stafit.
+          Krijo llogari, perditeso te dhenat, rolet dhe qasjen e stafit.
         </p>
       </div>
       <UButton
@@ -157,8 +217,8 @@ async function deleteProfile() {
       color="warning"
       variant="subtle"
       icon="i-lucide-shield-alert"
-      title="Kërkohet superadmin"
-      description="Vetëm superadmin mund të krijojë, ndryshojë ose fshijë llogari të stafit."
+      title="Kerkohet superadmin"
+      description="Vetem superadmin mund te krijoje, ndryshoje ose fshije llogari te stafit."
     />
     <UAlert
       v-if="error"
@@ -179,7 +239,7 @@ async function deleteProfile() {
       </div>
       <div class="border-t border-default p-5 sm:border-l sm:border-t-0">
         <p class="dashboard-metric-label">
-          Aktivë
+          Aktiv
         </p>
         <p class="dashboard-metric-value mt-2 text-emerald-600">
           {{ staffStats.active }}
@@ -187,7 +247,7 @@ async function deleteProfile() {
       </div>
       <div class="border-t border-default p-5 sm:border-l sm:border-t-0">
         <p class="dashboard-metric-label">
-          Administratorë
+          Administratore
         </p>
         <p class="dashboard-metric-value mt-2">
           {{ staffStats.admins }}
@@ -200,95 +260,31 @@ async function deleteProfile() {
         <UInput
           v-model="search"
           icon="i-lucide-search"
-          placeholder="Kërko me emër, email ose telefon..."
+          placeholder="Kerko me emer, email ose telefon..."
           class="w-full sm:max-w-md"
         />
       </div>
 
-      <div
-        v-if="status === 'pending'"
-        class="space-y-3 p-6"
-      >
-        <USkeleton
-          v-for="item in 4"
-          :key="item"
-          class="h-16 rounded-xl"
-        />
-      </div>
-      <div
-        v-else-if="filteredProfiles.length"
-        class="divide-y divide-default"
-      >
-        <article
-          v-for="item in filteredProfiles"
-          :key="item.id"
-          class="grid gap-4 p-5 sm:grid-cols-[minmax(220px,1fr)_150px_110px_auto] sm:items-center"
-        >
-          <div class="flex min-w-0 items-center gap-3">
-            <UAvatar
-              :text="item.full_name.charAt(0).toUpperCase()"
-              class="shrink-0 bg-[#062660] font-bold text-white"
-            />
-            <div class="min-w-0">
-              <p class="dashboard-card-title truncate">
-                {{ item.full_name }}
-              </p>
-              <p class="dashboard-meta truncate">
-                {{ item.email }}<span v-if="item.phone"> · {{ item.phone }}</span>
-              </p>
-            </div>
-          </div>
-          <UBadge
-            color="neutral"
-            variant="subtle"
-            class="w-fit"
-          >
-            {{ roleLabels[item.role] }}
-          </UBadge>
-          <UBadge
-            :color="item.is_active ? 'success' : 'error'"
-            variant="subtle"
-            class="w-fit"
-          >
-            {{ item.is_active ? 'Aktiv' : 'Joaktiv' }}
-          </UBadge>
-          <div class="flex justify-end gap-1">
-            <UTooltip text="Ndrysho">
-              <UButton
-                color="neutral"
-                variant="ghost"
-                icon="i-lucide-pencil"
-                aria-label="Ndrysho stafin"
-                :disabled="!isSuperAdmin"
-                @click="openEdit(item)"
-              />
-            </UTooltip>
-            <UTooltip text="Fshi">
-              <UButton
-                color="error"
-                variant="ghost"
-                icon="i-lucide-trash-2"
-                aria-label="Fshi stafin"
-                :disabled="!isSuperAdmin || item.id === currentProfile?.id"
-                @click="askDelete(item)"
-              />
-            </UTooltip>
-          </div>
-        </article>
-      </div>
-      <UEmpty
-        v-else
-        icon="i-lucide-users"
-        title="Nuk u gjet staf"
-        description="Ndrysho kërkimin ose shto një llogari të re."
-        class="py-14"
+      <UTable
+        v-model:pagination="pagination"
+        :data="filteredProfiles"
+        :columns="columns"
+        :loading="status === 'pending'"
+        :pagination-options="{ getPaginationRowModel: getPaginationRowModel() }"
+        class="min-h-72"
+      />
+      <DashboardTablePagination
+        v-if="filteredProfiles.length"
+        v-model:page-index="pagination.pageIndex"
+        :page-size="pagination.pageSize"
+        :total="filteredProfiles.length"
       />
     </section>
 
     <UModal
       v-model:open="formOpen"
-      :title="selectedProfile ? 'Ndrysho stafin' : 'Shto staf të ri'"
-      :description="selectedProfile ? 'Përditëso profilin, rolin ose fjalëkalimin.' : 'Krijo llogarinë Auth dhe profilin e dashboard-it.'"
+      :title="selectedProfile ? 'Ndrysho stafin' : 'Shto staf te ri'"
+      :description="selectedProfile ? 'Perditeso profilin, rolin ose fjalekalimin.' : 'Krijo llogarine Auth dhe profilin e dashboard-it.'"
     >
       <template #body>
         <form
@@ -340,9 +336,9 @@ async function deleteProfile() {
               />
             </UFormField>
             <UFormField
-              :label="selectedProfile ? 'Fjalëkalim i ri' : 'Fjalëkalimi'"
+              :label="selectedProfile ? 'Fjalekalim i ri' : 'Fjalekalimi'"
               :required="!selectedProfile"
-              :hint="selectedProfile ? 'Lëre bosh për të mos e ndryshuar' : undefined"
+              :hint="selectedProfile ? 'Lere bosh per te mos e ndryshuar' : undefined"
             >
               <UInput
                 v-model="form.password"
@@ -358,7 +354,7 @@ async function deleteProfile() {
                 Qasje aktive
               </p>
               <p class="dashboard-meta mt-1">
-                Lejo përdoruesin të hyjë në dashboard.
+                Lejo perdoruesin te hyje ne dashboard.
               </p>
             </div>
             <USwitch
@@ -382,41 +378,20 @@ async function deleteProfile() {
             form="staff-form"
             :loading="saving"
           >
-            {{ selectedProfile ? 'Ruaj ndryshimet' : 'Krijo llogarinë' }}
+            {{ selectedProfile ? 'Ruaj ndryshimet' : 'Krijo llogarine' }}
           </UButton>
         </div>
       </template>
     </UModal>
 
-    <UModal
+    <DashboardConfirmActionModal
       v-model:open="deleteOpen"
-      title="Fshi llogarinë"
-      description="Ky veprim largon përdoruesin nga Supabase Auth dhe nuk mund të zhbëhet."
-    >
-      <template #body>
-        <p class="text-sm text-muted">
-          Jeni i sigurt që dëshironi të fshini <strong class="text-highlighted">{{ profileToDelete?.full_name }}</strong>?
-        </p>
-      </template>
-      <template #footer>
-        <div class="flex w-full justify-end gap-2">
-          <UButton
-            color="neutral"
-            variant="outline"
-            @click="deleteOpen = false"
-          >
-            Anulo
-          </UButton>
-          <UButton
-            color="error"
-            icon="i-lucide-trash-2"
-            :loading="saving"
-            @click="deleteProfile"
-          >
-            Fshi përfundimisht
-          </UButton>
-        </div>
-      </template>
-    </UModal>
+      title="Fshi llogarine?"
+      :description="`Llogaria '${profileToDelete?.full_name || ''}' do te largohet nga Supabase Auth dhe dashboard-i. Ky veprim nuk mund te kthehet.`"
+      confirm-label="Fshi perfundimisht"
+      confirm-icon="i-lucide-trash-2"
+      :loading="saving"
+      @confirm="deleteProfile"
+    />
   </div>
 </template>

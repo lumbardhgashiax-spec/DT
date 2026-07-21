@@ -217,7 +217,8 @@ export async function requirePublicBookingService(event: H3Event): Promise<Publi
     // Public booking requests stay on the server. The service role key is never
     // exposed to the browser, and it lets this controlled API write through RLS.
     return serverSupabaseServiceRole<Database>(event)
-  } catch {
+  } catch (error) {
+    console.error('[public-booking] Supabase service role client is unavailable:', error instanceof Error ? error.message : error)
     throw createError({
       statusCode: 503,
       statusMessage: 'Shërbimi i rezervimeve nuk është i disponueshëm tani.'

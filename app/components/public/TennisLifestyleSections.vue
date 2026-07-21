@@ -66,7 +66,7 @@ const selectedSeason = computed(() => seasonModes[activeSeason.value] ?? seasonM
           <h2 id="story-title">Me pak organizim.<br><em>Me shume tenis.</em></h2>
           <div class="tennis-story__description">
             <p>
-              Zgjidh ambientin, daten dhe termin. Pjesa tjeter mbetet vetem loja jote ne Diamond Tennis Academy.
+              Zgjidh ambientin, daten dhe terminin. Pjesa tjeter mbetet vetem loja jote ne Diamond Tennis Academy.
             </p>
             <UButton
               to="/#availability"

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { CalendarDate, today } from '@internationalized/date'
 import type { DateValue } from '@internationalized/date'
+import { getPaginationRowModel } from '@tanstack/vue-table'
 import type { TableRow } from '~/types/database.types'
 import { ACADEMY_TIME_ZONE, formatCurrency } from '~/utils/dashboard'
 
@@ -24,6 +25,7 @@ const pendingRange = shallowRef<DateRange>({ start: currentDay, end: currentDay 
 const appliedRange = shallowRef<DateRange>({ start: currentDay, end: currentDay })
 const rangeOpen = ref(false)
 const rangeVersion = ref(0)
+const dailyPagination = ref({ pageIndex: 0, pageSize: 10 })
 
 function startOfDayIso(date: DateValue) {
   return new Date(`${date.toString()}T00:00:00`).toISOString()
@@ -51,6 +53,7 @@ function applyRange() {
     return
   }
   appliedRange.value = { ...pendingRange.value }
+  dailyPagination.value.pageIndex = 0
   rangeOpen.value = false
   rangeVersion.value++
 }
@@ -297,10 +300,18 @@ function exportCsv() {
           </p>
         </div>
         <UTable
+          v-model:pagination="dailyPagination"
           :data="dailyTableData"
           :loading="status === 'pending'"
+          :pagination-options="{ getPaginationRowModel: getPaginationRowModel() }"
           class="max-h-[560px]"
           sticky
+        />
+        <DashboardTablePagination
+          v-if="dailyTableData.length"
+          v-model:page-index="dailyPagination.pageIndex"
+          :page-size="dailyPagination.pageSize"
+          :total="dailyTableData.length"
         />
       </div>
 

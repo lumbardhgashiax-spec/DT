@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { getPaginationRowModel } from '@tanstack/vue-table'
+import type { TableColumn } from '@nuxt/ui'
+import { h, resolveComponent } from 'vue'
 import type { ReservationView } from '~/types/dashboard'
 import { formatCurrency, formatDateTime } from '~/utils/dashboard'
 
@@ -13,9 +16,13 @@ await loadProfile()
 
 const formOpen = ref(false)
 const selectedReservation = ref<ReservationView | null>(null)
+const confirmOpen = ref(false)
+const confirmLoading = ref(false)
+const pendingAction = ref<{ type: 'cancel' | 'delete', reservation: ReservationView } | null>(null)
 const search = ref('')
 const statusFilter = ref('all')
 const dateFilter = ref('')
+const pagination = ref({ pageIndex: 0, pageSize: 10 })
 
 const { data: reservations, status, refresh, error } = await useAsyncData('dashboard-reservations', async () => {
   return dashboardApi.listReservations()
@@ -29,12 +36,20 @@ const filteredReservations = computed(() => (reservations.value || []).filter((r
   return matchesSearch && matchesStatus && matchesDate
 }))
 
+watch([search, statusFilter, dateFilter], () => {
+  pagination.value.pageIndex = 0
+})
+
 const statusMeta: Record<string, { label: string, color: 'warning' | 'success' | 'neutral' | 'error' }> = {
-  pending: { label: 'Në pritje', color: 'warning' },
+  pending: { label: 'Ne pritje', color: 'warning' },
   confirmed: { label: 'Konfirmuar', color: 'success' },
-  completed: { label: 'Përfunduar', color: 'neutral' },
+  completed: { label: 'Perfunduar', color: 'neutral' },
   cancelled: { label: 'Anuluar', color: 'error' }
 }
+
+const UBadge = resolveComponent('UBadge')
+const UButton = resolveComponent('UButton')
+const UTooltip = resolveComponent('UTooltip')
 
 function openCreate() {
   selectedReservation.value = null
@@ -46,9 +61,13 @@ function openEdit(reservation: ReservationView) {
   formOpen.value = true
 }
 
-async function cancelReservation(reservation: ReservationView) {
-  if (!import.meta.client || !window.confirm('A je i sigurt që dëshiron ta anulosh këtë rezervim?')) return
+function askReservationAction(type: 'cancel' | 'delete', reservation: ReservationView) {
+  if (type === 'delete' && !canManagePricing.value) return
+  pendingAction.value = { type, reservation }
+  confirmOpen.value = true
+}
 
+async function cancelReservation(reservation: ReservationView) {
   try {
     await dashboardApi.cancelReservation(reservation.id)
     toast.add({ title: 'Rezervimi u anulua', color: 'success' })
@@ -59,9 +78,7 @@ async function cancelReservation(reservation: ReservationView) {
 }
 
 async function deleteReservation(reservation: ReservationView) {
-  if (!canManagePricing.value || !import.meta.client) return
-  if (!window.confirm('A je i sigurt qe deshiron ta fshish pergjithmone kete rezervim? Ky veprim nuk mund te kthehet.')) return
-
+  if (!canManagePricing.value) return
   try {
     await dashboardApi.deleteReservation(reservation.id)
     toast.add({ title: 'Rezervimi u fshi', color: 'success' })
@@ -70,6 +87,98 @@ async function deleteReservation(reservation: ReservationView) {
     toast.add({ title: 'Rezervimi nuk u fshi', description: cause instanceof Error ? cause.message : 'Provo perseri.', color: 'error' })
   }
 }
+
+async function confirmReservationAction() {
+  if (!pendingAction.value || confirmLoading.value) return
+  confirmLoading.value = true
+  try {
+    if (pendingAction.value.type === 'cancel') {
+      await cancelReservation(pendingAction.value.reservation)
+    } else {
+      await deleteReservation(pendingAction.value.reservation)
+    }
+    confirmOpen.value = false
+    pendingAction.value = null
+  } finally {
+    confirmLoading.value = false
+  }
+}
+
+const columns: TableColumn<ReservationView>[] = [
+  {
+    id: 'customer',
+    header: 'Klienti',
+    cell: ({ row }) => h('div', { class: 'min-w-0' }, [
+      h('p', { class: 'font-medium text-highlighted truncate' }, `${row.original.customers?.first_name || ''} ${row.original.customers?.last_name || ''}`.trim() || 'Pa emer'),
+      h('p', { class: 'text-xs text-muted truncate' }, row.original.customers?.phone || 'Pa telefon')
+    ])
+  },
+  {
+    id: 'court',
+    header: 'Fusha',
+    cell: ({ row }) => h('div', [
+      h('p', { class: 'font-medium text-highlighted' }, row.original.courts?.name || 'Pa fushe'),
+      h('p', { class: 'text-xs text-muted' }, row.original.courts?.court_type === 'indoor' ? 'E mbyllur' : 'E hapur')
+    ])
+  },
+  {
+    accessorKey: 'start_at',
+    header: 'Termini',
+    cell: ({ row }) => {
+      const minutes = Math.round((new Date(row.original.end_at).getTime() - new Date(row.original.start_at).getTime()) / 60000)
+      return h('div', [
+        h('p', { class: 'font-medium text-highlighted' }, formatDateTime(row.original.start_at)),
+        h('p', { class: 'text-xs text-muted' }, `${minutes} min`)
+      ])
+    }
+  },
+  {
+    accessorKey: 'status',
+    header: 'Statusi',
+    cell: ({ row }) => {
+      const meta = statusMeta[row.original.status] ?? { label: 'Ne pritje', color: 'warning' as const }
+      return h(UBadge, { color: meta.color, variant: 'subtle' }, () => meta.label)
+    }
+  },
+  {
+    accessorKey: 'price',
+    header: 'Cmimi',
+    meta: { class: { th: 'text-right', td: 'text-right font-semibold text-highlighted' } },
+    cell: ({ row }) => formatCurrency(row.original.price)
+  },
+  {
+    id: 'actions',
+    header: '',
+    meta: { class: { th: 'w-32', td: 'text-right' } },
+    cell: ({ row }) => h('div', { class: 'flex justify-end gap-1' }, [
+      h(UTooltip, { text: 'Ndrysho' }, () => h(UButton, {
+        'color': 'neutral',
+        'variant': 'ghost',
+        'icon': 'i-lucide-pencil',
+        'aria-label': 'Ndrysho rezervimin',
+        'onClick': () => openEdit(row.original)
+      })),
+      row.original.status !== 'cancelled'
+        ? h(UTooltip, { text: 'Anulo' }, () => h(UButton, {
+            'color': 'error',
+            'variant': 'ghost',
+            'icon': 'i-lucide-calendar-x',
+            'aria-label': 'Anulo rezervimin',
+            'onClick': () => askReservationAction('cancel', row.original)
+          }))
+        : null,
+      canManagePricing.value
+        ? h(UTooltip, { text: 'Fshi' }, () => h(UButton, {
+            'color': 'error',
+            'variant': 'ghost',
+            'icon': 'i-lucide-trash-2',
+            'aria-label': 'Fshi rezervimin',
+            'onClick': () => askReservationAction('delete', row.original)
+          }))
+        : null
+    ])
+  }
+]
 
 onMounted(() => {
   if (route.query.new === '1') openCreate()
@@ -87,7 +196,7 @@ onMounted(() => {
           Rezervimet
         </h1>
         <p class="dashboard-page-description">
-          Krijo, filtro dhe menaxho terminet e akademisë.
+          Krijo, filtro dhe menaxho terminet e akademise.
         </p>
       </div>
       <UButton
@@ -99,11 +208,11 @@ onMounted(() => {
       </UButton>
     </header>
 
-    <section class="mb-5 grid gap-3 rounded-3xl border border-slate-200/70 bg-white p-4 shadow-sm sm:grid-cols-[1fr_auto_auto] dark:border-slate-800 dark:bg-slate-900">
+    <section class="mb-5 grid gap-3 rounded-2xl border border-default bg-white p-4 shadow-xs sm:grid-cols-[1fr_auto_auto] dark:bg-slate-900">
       <UInput
         v-model="search"
         icon="i-lucide-search"
-        placeholder="Kërko klientin ose telefonin..."
+        placeholder="Kerko klientin ose telefonin..."
         class="w-full"
       />
       <select
@@ -111,13 +220,13 @@ onMounted(() => {
         class="dashboard-select sm:w-44"
       >
         <option value="all">
-          Të gjitha statuset
+          Te gjitha statuset
         </option><option value="pending">
-          Në pritje
+          Ne pritje
         </option><option value="confirmed">
           Konfirmuar
         </option><option value="completed">
-          Përfunduar
+          Perfunduar
         </option><option value="cancelled">
           Anuluar
         </option>
@@ -134,114 +243,26 @@ onMounted(() => {
       color="error"
       variant="subtle"
       icon="i-lucide-database-zap"
-      title="Të dhënat nuk u ngarkuan"
+      title="Te dhenat nuk u ngarkuan"
       :description="error.message"
       class="mb-5"
     />
 
-    <section class="overflow-hidden rounded-3xl border border-slate-200/70 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
-      <div
-        v-if="status === 'pending'"
-        class="space-y-3 p-6"
-      >
-        <USkeleton
-          v-for="item in 5"
-          :key="item"
-          class="h-16 w-full rounded-2xl"
-        />
-      </div>
-
-      <div
-        v-else-if="filteredReservations.length"
-        class="divide-y divide-slate-100 dark:divide-slate-800"
-      >
-        <article
-          v-for="reservation in filteredReservations"
-          :key="reservation.id"
-          class="grid gap-4 p-5 transition hover:bg-slate-50/80 sm:grid-cols-[minmax(180px,1.2fr)_minmax(170px,1fr)_auto_auto] sm:items-center dark:hover:bg-slate-950/30"
-        >
-          <div class="min-w-0">
-            <p class="dashboard-card-title truncate">
-              {{ reservation.customers?.first_name }} {{ reservation.customers?.last_name }}
-            </p>
-            <p class="dashboard-meta mt-1 flex items-center gap-1.5">
-              <UIcon
-                name="i-lucide-phone"
-                class="size-3.5"
-              />{{ reservation.customers?.phone }}
-            </p>
-          </div>
-          <div>
-            <p class="dashboard-card-title">
-              {{ reservation.courts?.name }}
-            </p>
-            <p class="dashboard-meta mt-1">
-              {{ formatDateTime(reservation.start_at) }} · {{ Math.round((new Date(reservation.end_at).getTime() - new Date(reservation.start_at).getTime()) / 60000) }} min
-            </p>
-          </div>
-          <div class="flex items-center gap-3 sm:block sm:text-right">
-            <UBadge
-              :color="statusMeta[reservation.status]?.color || 'neutral'"
-              variant="subtle"
-            >
-              {{ statusMeta[reservation.status]?.label }}
-            </UBadge>
-            <p class="dashboard-card-title mt-0 sm:mt-2">
-              {{ formatCurrency(reservation.price) }}
-            </p>
-          </div>
-          <div class="flex justify-end gap-1">
-            <UButton
-              color="neutral"
-              variant="ghost"
-              icon="i-lucide-pencil"
-              aria-label="Ndrysho"
-              @click="openEdit(reservation)"
-            />
-            <UButton
-              v-if="reservation.status !== 'cancelled'"
-              color="error"
-              variant="ghost"
-              icon="i-lucide-calendar-x"
-              aria-label="Anulo"
-              @click="cancelReservation(reservation)"
-            />
-            <UButton
-              v-if="canManagePricing"
-              color="error"
-              variant="ghost"
-              icon="i-lucide-trash-2"
-              aria-label="Fshi përgjithmonë"
-              @click="deleteReservation(reservation)"
-            />
-          </div>
-        </article>
-      </div>
-
-      <div
-        v-else
-        class="mx-auto flex max-w-md flex-col items-center px-6 py-16 text-center"
-      >
-        <div class="mb-5 grid size-16 place-items-center rounded-3xl bg-[#062660]/5 text-[#062660] dark:bg-white/5 dark:text-[#d6ad63]">
-          <UIcon
-            name="i-lucide-calendar-search"
-            class="size-8"
-          />
-        </div>
-        <h2 class="dashboard-section-title">
-          Nuk u gjet asnjë rezervim
-        </h2>
-        <p class="dashboard-section-description mt-2">
-          Ndrysho filtrat ose krijo rezervimin e parë.
-        </p>
-        <UButton
-          class="mt-5"
-          icon="i-lucide-plus"
-          @click="openCreate"
-        >
-          Rezervim i ri
-        </UButton>
-      </div>
+    <section class="overflow-hidden rounded-2xl border border-default bg-white shadow-xs dark:bg-slate-900">
+      <UTable
+        v-model:pagination="pagination"
+        :data="filteredReservations"
+        :columns="columns"
+        :loading="status === 'pending'"
+        :pagination-options="{ getPaginationRowModel: getPaginationRowModel() }"
+        class="min-h-80"
+      />
+      <DashboardTablePagination
+        v-if="filteredReservations.length"
+        v-model:page-index="pagination.pageIndex"
+        :page-size="pagination.pageSize"
+        :total="filteredReservations.length"
+      />
     </section>
 
     <DashboardReservationForm
@@ -249,6 +270,18 @@ onMounted(() => {
       :reservation="selectedReservation"
       :initial-date="typeof route.query.date === 'string' ? route.query.date : null"
       @saved="refresh"
+    />
+
+    <DashboardConfirmActionModal
+      v-model:open="confirmOpen"
+      :title="pendingAction?.type === 'cancel' ? 'Anulo rezervimin?' : 'Fshi rezervimin?'"
+      :description="pendingAction?.type === 'cancel'
+        ? 'Rezervimi do te shenohet si i anuluar dhe nuk do te llogaritet si aktiv.'
+        : 'Rezervimi do te fshihet pergjithmone. Ky veprim nuk mund te kthehet.'"
+      :confirm-label="pendingAction?.type === 'cancel' ? 'Anulo rezervimin' : 'Fshi perfundimisht'"
+      :confirm-icon="pendingAction?.type === 'cancel' ? 'i-lucide-calendar-x' : 'i-lucide-trash-2'"
+      :loading="confirmLoading"
+      @confirm="confirmReservationAction"
     />
   </div>
 </template>

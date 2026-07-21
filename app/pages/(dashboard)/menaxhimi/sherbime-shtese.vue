@@ -1,9 +1,12 @@
 <script setup lang="ts">
+import { getPaginationRowModel } from '@tanstack/vue-table'
+import type { TableColumn } from '@nuxt/ui'
+import { h, resolveComponent } from 'vue'
 import type { TableRow } from '~/types/database.types'
 import { formatCurrency } from '~/utils/dashboard'
 
 definePageMeta({ layout: 'dashboard' })
-useSeoMeta({ title: 'Shërbime shtesë | Diamond Tennis Academy', robots: 'noindex, nofollow' })
+useSeoMeta({ title: 'Sherbime shtese | Diamond Tennis Academy', robots: 'noindex, nofollow' })
 
 const dashboardApi = useDashboardApi()
 const toast = useToast()
@@ -11,13 +14,21 @@ const { canManagePricing, loadProfile } = useDashboardProfile()
 await loadProfile()
 
 const modalOpen = ref(false)
+const confirmOpen = ref(false)
 const saving = ref(false)
+const deleting = ref(false)
 const editingId = ref<string | null>(null)
+const serviceToDelete = ref<TableRow<'extra_services'> | null>(null)
+const pagination = ref({ pageIndex: 0, pageSize: 10 })
 const form = reactive({ name: '', description: '', price: 0, isActive: true })
 
 const { data: services, status, error, refresh } = await useAsyncData('extra-services-management', async () => {
   return dashboardApi.listExtraServices()
 })
+
+const UBadge = resolveComponent('UBadge')
+const UButton = resolveComponent('UButton')
+const UTooltip = resolveComponent('UTooltip')
 
 function openCreate() {
   editingId.value = null
@@ -34,35 +45,90 @@ function openEdit(service: TableRow<'extra_services'>) {
 async function save() {
   if (!canManagePricing.value || saving.value) return
   if (!form.name.trim() || form.price < 0) {
-    toast.add({ title: 'Kontrollo emrin dhe çmimin', color: 'warning' })
+    toast.add({ title: 'Kontrollo emrin dhe cmimin', color: 'warning' })
     return
   }
 
   saving.value = true
   try {
     await dashboardApi.saveExtraService({ id: editingId.value || undefined, name: form.name, description: form.description, price: form.price, isActive: form.isActive })
-    toast.add({ title: editingId.value ? 'Shërbimi u përditësua' : 'Shërbimi u shtua', color: 'success' })
+    toast.add({ title: editingId.value ? 'Sherbimi u perditesua' : 'Sherbimi u shtua', color: 'success' })
     modalOpen.value = false
     await refresh()
   } catch (cause) {
-    toast.add({ title: 'Ruajtja dështoi', description: cause instanceof Error ? cause.message : 'Emri i shërbimit duhet të jetë unik.', color: 'error' })
+    toast.add({ title: 'Ruajtja deshtoi', description: cause instanceof Error ? cause.message : 'Emri i sherbimit duhet te jete unik.', color: 'error' })
   } finally {
     saving.value = false
   }
 }
 
-async function deleteService(service: TableRow<'extra_services'>) {
-  if (!canManagePricing.value || !import.meta.client) return
-  if (!window.confirm(`A je i sigurt qe deshiron ta fshish sherbimin "${service.name}"?`)) return
+function askDeleteService(service: TableRow<'extra_services'>) {
+  if (!canManagePricing.value) return
+  serviceToDelete.value = service
+  confirmOpen.value = true
+}
 
+async function deleteService() {
+  if (!canManagePricing.value || !serviceToDelete.value || deleting.value) return
+  deleting.value = true
   try {
-    await dashboardApi.deleteExtraService(service.id)
+    await dashboardApi.deleteExtraService(serviceToDelete.value.id)
     toast.add({ title: 'Sherbimi u fshi', color: 'success' })
+    confirmOpen.value = false
+    serviceToDelete.value = null
     await refresh()
   } catch (cause) {
     toast.add({ title: 'Sherbimi nuk u fshi', description: cause instanceof Error ? cause.message : 'Provo perseri.', color: 'error' })
+  } finally {
+    deleting.value = false
   }
 }
+
+const columns: TableColumn<TableRow<'extra_services'>>[] = [
+  {
+    accessorKey: 'name',
+    header: 'Sherbimi',
+    cell: ({ row }) => h('div', { class: 'min-w-0' }, [
+      h('p', { class: 'font-medium text-highlighted truncate' }, row.original.name),
+      row.original.description ? h('p', { class: 'text-xs text-muted truncate' }, row.original.description) : null
+    ])
+  },
+  {
+    accessorKey: 'price',
+    header: 'Cmimi',
+    meta: { class: { th: 'text-right', td: 'text-right font-semibold text-highlighted' } },
+    cell: ({ row }) => formatCurrency(row.original.price)
+  },
+  {
+    accessorKey: 'is_active',
+    header: 'Statusi',
+    cell: ({ row }) => h(UBadge, { color: row.original.is_active ? 'success' : 'neutral', variant: 'subtle' }, () => row.original.is_active ? 'Aktiv' : 'Joaktiv')
+  },
+  {
+    id: 'actions',
+    header: '',
+    meta: { class: { th: 'w-24', td: 'text-right' } },
+    cell: ({ row }) => h('div', { class: 'flex justify-end gap-1' }, [
+      h(UTooltip, { text: 'Ndrysho' }, () => h(UButton, {
+        'color': 'neutral',
+        'variant': 'ghost',
+        'icon': 'i-lucide-pencil',
+        'aria-label': 'Ndrysho sherbimin',
+        'disabled': !canManagePricing.value,
+        'onClick': () => openEdit(row.original)
+      })),
+      canManagePricing.value
+        ? h(UTooltip, { text: 'Fshi' }, () => h(UButton, {
+            'color': 'error',
+            'variant': 'ghost',
+            'icon': 'i-lucide-trash-2',
+            'aria-label': 'Fshi sherbimin',
+            'onClick': () => askDeleteService(row.original)
+          }))
+        : null
+    ])
+  }
+]
 </script>
 
 <template>
@@ -73,10 +139,10 @@ async function deleteService(service: TableRow<'extra_services'>) {
           Menaxhimi
         </p>
         <h1 class="dashboard-page-title">
-          Shërbime shtesë
+          Sherbime shtese
         </h1>
         <p class="dashboard-page-description">
-          Shto shërbime si ngrohja, pajisjet ose çdo shërbim tjetër dhe cakto çmimin e tyre.
+          Shto sherbime si ngrohja, pajisjet ose cdo sherbim tjeter dhe cakto cmimin e tyre.
         </p>
       </div>
       <UButton
@@ -85,7 +151,7 @@ async function deleteService(service: TableRow<'extra_services'>) {
         size="lg"
         @click="openCreate"
       >
-        Shto shërbim
+        Shto sherbim
       </UButton>
     </header>
 
@@ -94,91 +160,38 @@ async function deleteService(service: TableRow<'extra_services'>) {
       color="warning"
       variant="subtle"
       icon="i-lucide-shield-alert"
-      title="Qasje vetëm për lexim"
-      description="Vetëm admin dhe superadmin mund t’i menaxhojnë shërbimet."
+      title="Qasje vetem per lexim"
+      description="Vetem admin dhe superadmin mund t'i menaxhojne sherbimet."
     />
     <UAlert
       v-if="error"
       color="error"
       variant="subtle"
-      title="Shërbimet nuk u ngarkuan"
+      title="Sherbimet nuk u ngarkuan"
       :description="error.message"
     />
 
     <section class="overflow-hidden rounded-2xl border border-default bg-white shadow-xs dark:bg-slate-900">
-      <div
-        v-if="status === 'pending'"
-        class="space-y-3 p-6"
-      >
-        <USkeleton
-          v-for="item in 4"
-          :key="item"
-          class="h-16 rounded-xl"
-        />
-      </div>
-      <div
-        v-else
-        class="divide-y divide-default"
-      >
-        <article
-          v-for="service in services"
-          :key="service.id"
-          class="grid gap-4 p-5 sm:grid-cols-[1fr_auto_auto] sm:items-center"
-        >
-          <div>
-            <div class="flex flex-wrap items-center gap-2">
-              <p class="dashboard-card-title">
-                {{ service.name }}
-              </p><UBadge
-                :color="service.is_active ? 'success' : 'neutral'"
-                variant="subtle"
-              >
-                {{ service.is_active ? 'Aktiv' : 'Joaktiv' }}
-              </UBadge>
-            </div>
-            <p
-              v-if="service.description"
-              class="dashboard-meta mt-1"
-            >
-              {{ service.description }}
-            </p>
-          </div>
-          <p class="text-lg font-bold text-highlighted">
-            {{ formatCurrency(service.price) }}
-          </p>
-          <div class="flex items-center gap-1">
-            <UButton
-              color="neutral"
-              variant="ghost"
-              icon="i-lucide-pencil"
-              aria-label="Ndrysho shërbimin"
-              :disabled="!canManagePricing"
-              @click="openEdit(service)"
-            />
-            <UButton
-              v-if="canManagePricing"
-              color="error"
-              variant="ghost"
-              icon="i-lucide-trash-2"
-              aria-label="Fshi shërbimin"
-              @click="deleteService(service)"
-            />
-          </div>
-        </article>
-        <UEmpty
-          v-if="!services?.length"
-          icon="i-lucide-hand-platter"
-          title="Nuk ka shërbime shtesë"
-          description="Shto p.sh. Ngrohje ose pajisje tenisi."
-          class="py-14"
-        />
-      </div>
+      <UTable
+        v-model:pagination="pagination"
+        :data="services || []"
+        :columns="columns"
+        :loading="status === 'pending'"
+        :pagination-options="{ getPaginationRowModel: getPaginationRowModel() }"
+        class="min-h-72"
+      />
+      <DashboardTablePagination
+        v-if="services?.length"
+        v-model:page-index="pagination.pageIndex"
+        :page-size="pagination.pageSize"
+        :total="services.length"
+      />
     </section>
 
     <UModal
       v-model:open="modalOpen"
-      :title="editingId ? 'Ndrysho shërbimin' : 'Shto shërbim'"
-      description="Shërbimet mund të aktivizohen ose çaktivizohen pa humbur të dhënat."
+      :title="editingId ? 'Ndrysho sherbimin' : 'Shto sherbim'"
+      description="Sherbimet mund te aktivizohen ose caktivizohen pa humbur te dhenat."
     >
       <template #body>
         <form
@@ -197,7 +210,7 @@ async function deleteService(service: TableRow<'extra_services'>) {
               class="w-full"
             />
           </UFormField>
-          <UFormField label="Përshkrimi">
+          <UFormField label="Pershkrimi">
             <UTextarea
               v-model="form.description"
               maxlength="300"
@@ -206,7 +219,7 @@ async function deleteService(service: TableRow<'extra_services'>) {
             />
           </UFormField>
           <UFormField
-            label="Çmimi në EUR"
+            label="Cmimi ne EUR"
             required
           >
             <UInput
@@ -231,7 +244,8 @@ async function deleteService(service: TableRow<'extra_services'>) {
             @click="modalOpen = false"
           >
             Anulo
-          </UButton><UButton
+          </UButton>
+          <UButton
             type="submit"
             form="extra-service-form"
             :loading="saving"
@@ -241,5 +255,15 @@ async function deleteService(service: TableRow<'extra_services'>) {
         </div>
       </template>
     </UModal>
+
+    <DashboardConfirmActionModal
+      v-model:open="confirmOpen"
+      title="Fshi sherbimin?"
+      :description="`Sherbimi '${serviceToDelete?.name || ''}' do te fshihet pergjithmone. Ky veprim nuk mund te kthehet.`"
+      confirm-label="Fshi sherbimin"
+      confirm-icon="i-lucide-trash-2"
+      :loading="deleting"
+      @confirm="deleteService"
+    />
   </div>
 </template>

@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { getPaginationRowModel } from '@tanstack/vue-table'
+import type { TableColumn } from '@nuxt/ui'
+import { h, resolveComponent } from 'vue'
 import type { TableRow } from '~/types/database.types'
 import { toLocalDateInput } from '~/utils/dashboard'
 
@@ -11,14 +14,22 @@ const { canManagePricing, loadProfile } = useDashboardProfile()
 await loadProfile()
 
 const modalOpen = ref(false)
+const confirmOpen = ref(false)
 const saving = ref(false)
+const deleting = ref(false)
 const editingId = ref<string | null>(null)
+const seasonToDelete = ref<TableRow<'seasons'> | null>(null)
+const pagination = ref({ pageIndex: 0, pageSize: 10 })
 const today = toLocalDateInput(new Date())
 const form = reactive({ name: '', type: 'summer' as 'summer' | 'winter', startsOn: today, endsOn: today, isActive: true })
 
 const { data: seasons, status, error, refresh } = await useAsyncData('season-management', async () => {
   return dashboardApi.listSeasons()
 })
+
+const UBadge = resolveComponent('UBadge')
+const UButton = resolveComponent('UButton')
+const UTooltip = resolveComponent('UTooltip')
 
 function openCreate() {
   editingId.value = null
@@ -42,28 +53,82 @@ async function save() {
   saving.value = true
   try {
     await dashboardApi.saveSeason({ id: editingId.value || undefined, name: form.name, seasonType: form.type, startsOn: form.startsOn, endsOn: form.endsOn, isActive: form.isActive })
-    toast.add({ title: editingId.value ? 'Sezoni u përditësua' : 'Sezoni u shtua', color: 'success' })
+    toast.add({ title: editingId.value ? 'Sezoni u perditesua' : 'Sezoni u shtua', color: 'success' })
     modalOpen.value = false
     await refresh()
   } catch (cause) {
-    toast.add({ title: 'Ruajtja dështoi', description: cause instanceof Error ? cause.message : 'Sezonet aktive nuk duhet të mbivendosen.', color: 'error' })
+    toast.add({ title: 'Ruajtja deshtoi', description: cause instanceof Error ? cause.message : 'Sezonet aktive nuk duhet te mbivendosen.', color: 'error' })
   } finally {
     saving.value = false
   }
 }
 
-async function deleteSeason(item: TableRow<'seasons'>) {
-  if (!canManagePricing.value || !import.meta.client) return
-  if (!window.confirm(`A je i sigurt qe deshiron ta fshish sezonin "${item.name}"?`)) return
+function askDeleteSeason(item: TableRow<'seasons'>) {
+  if (!canManagePricing.value) return
+  seasonToDelete.value = item
+  confirmOpen.value = true
+}
 
+async function deleteSeason() {
+  if (!canManagePricing.value || !seasonToDelete.value || deleting.value) return
+  deleting.value = true
   try {
-    await dashboardApi.deleteSeason(item.id)
+    await dashboardApi.deleteSeason(seasonToDelete.value.id)
     toast.add({ title: 'Sezoni u fshi', color: 'success' })
+    confirmOpen.value = false
+    seasonToDelete.value = null
     await refresh()
   } catch (cause) {
     toast.add({ title: 'Sezoni nuk u fshi', description: cause instanceof Error ? cause.message : 'Provo perseri.', color: 'error' })
+  } finally {
+    deleting.value = false
   }
 }
+
+const columns: TableColumn<TableRow<'seasons'>>[] = [
+  {
+    accessorKey: 'name',
+    header: 'Sezoni',
+    cell: ({ row }) => h('div', [
+      h('p', { class: 'font-medium text-highlighted' }, row.original.name),
+      h('p', { class: 'text-xs text-muted' }, `${row.original.starts_on} - ${row.original.ends_on}`)
+    ])
+  },
+  {
+    accessorKey: 'season_type',
+    header: 'Lloji',
+    cell: ({ row }) => h(UBadge, { color: 'neutral', variant: 'subtle' }, () => row.original.season_type === 'summer' ? 'Vere' : 'Dimer')
+  },
+  {
+    accessorKey: 'is_active',
+    header: 'Statusi',
+    cell: ({ row }) => h(UBadge, { color: row.original.is_active ? 'success' : 'neutral', variant: 'subtle' }, () => row.original.is_active ? 'Aktiv' : 'Joaktiv')
+  },
+  {
+    id: 'actions',
+    header: '',
+    meta: { class: { th: 'w-24', td: 'text-right' } },
+    cell: ({ row }) => h('div', { class: 'flex justify-end gap-1' }, [
+      h(UTooltip, { text: 'Ndrysho' }, () => h(UButton, {
+        'color': 'neutral',
+        'variant': 'ghost',
+        'icon': 'i-lucide-pencil',
+        'aria-label': 'Ndrysho sezonin',
+        'disabled': !canManagePricing.value,
+        'onClick': () => openEdit(row.original)
+      })),
+      canManagePricing.value
+        ? h(UTooltip, { text: 'Fshi' }, () => h(UButton, {
+            'color': 'error',
+            'variant': 'ghost',
+            'icon': 'i-lucide-trash-2',
+            'aria-label': 'Fshi sezonin',
+            'onClick': () => askDeleteSeason(row.original)
+          }))
+        : null
+    ])
+  }
+]
 </script>
 
 <template>
@@ -77,7 +142,7 @@ async function deleteSeason(item: TableRow<'seasons'>) {
           Sezonet
         </h1>
         <p class="dashboard-page-description">
-          Menaxho periudhat verore dhe dimërore që përcaktojnë çmimet e rezervimeve.
+          Menaxho periudhat verore dhe dimerore qe percaktojne cmimet e rezervimeve.
         </p>
       </div>
       <UButton
@@ -95,8 +160,8 @@ async function deleteSeason(item: TableRow<'seasons'>) {
       color="warning"
       variant="subtle"
       icon="i-lucide-shield-alert"
-      title="Qasje vetëm për lexim"
-      description="Vetëm admin dhe superadmin mund t’i ndryshojnë sezonet."
+      title="Qasje vetem per lexim"
+      description="Vetem admin dhe superadmin mund t'i ndryshojne sezonet."
     />
     <UAlert
       v-if="error"
@@ -107,72 +172,26 @@ async function deleteSeason(item: TableRow<'seasons'>) {
     />
 
     <section class="overflow-hidden rounded-2xl border border-default bg-white shadow-xs dark:bg-slate-900">
-      <div
-        v-if="status === 'pending'"
-        class="space-y-3 p-6"
-      >
-        <USkeleton
-          v-for="item in 4"
-          :key="item"
-          class="h-16 rounded-xl"
-        />
-      </div>
-      <div
-        v-else
-        class="divide-y divide-default"
-      >
-        <article
-          v-for="item in seasons"
-          :key="item.id"
-          class="grid gap-4 p-5 sm:grid-cols-[1fr_auto_auto] sm:items-center"
-        >
-          <div>
-            <p class="dashboard-card-title">
-              {{ item.name }}
-            </p>
-            <p class="dashboard-meta mt-1">
-              {{ item.starts_on }} – {{ item.ends_on }}
-            </p>
-          </div>
-          <UBadge
-            :color="item.is_active ? 'success' : 'neutral'"
-            variant="subtle"
-          >
-            {{ item.season_type === 'summer' ? 'Verë' : 'Dimër' }} · {{ item.is_active ? 'Aktiv' : 'Joaktiv' }}
-          </UBadge>
-          <div class="flex items-center gap-1">
-            <UButton
-              color="neutral"
-              variant="ghost"
-              icon="i-lucide-pencil"
-              aria-label="Ndrysho sezonin"
-              :disabled="!canManagePricing"
-              @click="openEdit(item)"
-            />
-            <UButton
-              v-if="canManagePricing"
-              color="error"
-              variant="ghost"
-              icon="i-lucide-trash-2"
-              aria-label="Fshi sezonin"
-              @click="deleteSeason(item)"
-            />
-          </div>
-        </article>
-        <UEmpty
-          v-if="!seasons?.length"
-          icon="i-lucide-sun-snow"
-          title="Nuk ka sezone"
-          description="Shto sezonin e parë për të konfiguruar çmimet."
-          class="py-14"
-        />
-      </div>
+      <UTable
+        v-model:pagination="pagination"
+        :data="seasons || []"
+        :columns="columns"
+        :loading="status === 'pending'"
+        :pagination-options="{ getPaginationRowModel: getPaginationRowModel() }"
+        class="min-h-72"
+      />
+      <DashboardTablePagination
+        v-if="seasons?.length"
+        v-model:page-index="pagination.pageIndex"
+        :page-size="pagination.pageSize"
+        :total="seasons.length"
+      />
     </section>
 
     <UModal
       v-model:open="modalOpen"
       :title="editingId ? 'Ndrysho sezonin' : 'Shto sezon'"
-      description="Datat e sezoneve aktive nuk mund të mbivendosen."
+      description="Datat e sezoneve aktive nuk mund te mbivendosen."
     >
       <template #body>
         <form
@@ -186,7 +205,7 @@ async function deleteSeason(item: TableRow<'seasons'>) {
           >
             <UInput
               v-model="form.name"
-              placeholder="p.sh. Dimër 2026"
+              placeholder="p.sh. Dimer 2026"
               maxlength="80"
               class="w-full"
             />
@@ -197,7 +216,7 @@ async function deleteSeason(item: TableRow<'seasons'>) {
           >
             <USelect
               v-model="form.type"
-              :items="[{ label: 'Verë', value: 'summer' }, { label: 'Dimër', value: 'winter' }]"
+              :items="[{ label: 'Vere', value: 'summer' }, { label: 'Dimer', value: 'winter' }]"
               value-key="value"
               class="w-full"
             />
@@ -214,7 +233,7 @@ async function deleteSeason(item: TableRow<'seasons'>) {
               />
             </UFormField>
             <UFormField
-              label="Përfundon"
+              label="Perfundon"
               required
             >
               <UInput
@@ -250,5 +269,15 @@ async function deleteSeason(item: TableRow<'seasons'>) {
         </div>
       </template>
     </UModal>
+
+    <DashboardConfirmActionModal
+      v-model:open="confirmOpen"
+      title="Fshi sezonin?"
+      :description="`Sezoni '${seasonToDelete?.name || ''}' do te fshihet pergjithmone. Ky veprim nuk mund te kthehet.`"
+      confirm-label="Fshi sezonin"
+      confirm-icon="i-lucide-trash-2"
+      :loading="deleting"
+      @confirm="deleteSeason"
+    />
   </div>
 </template>

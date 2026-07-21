@@ -163,7 +163,7 @@ onMounted(() => {
       <div>
         <p><span /> Rezervim online</p>
         <h2 id="availability-title">
-          Gjej termin tend.
+          Gjej terminin tend.
         </h2>
       </div>
       <span>Zgjidh fushen dhe daten. Oret e lira shfaqen menjehere.</span>
@@ -186,7 +186,7 @@ onMounted(() => {
         >
           <div class="booking-block__title">
             <h3 id="choose-court">
-              Cilen fushe deshiron?
+              Cilen fushe deshironi?
             </h3>
             <span>{{ selectedCourt ? courtTypeLabel(selectedCourt.courtType) : '' }}</span>
           </div>

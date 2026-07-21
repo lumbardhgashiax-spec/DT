@@ -20,14 +20,23 @@ export default defineNuxtConfig({
     openRouterSiteName: process.env.NUXT_OPENROUTER_SITE_NAME || 'Diamond Tennis Academy',
     public: {
       siteUrl: process.env.NUXT_PUBLIC_SITE_URL || '',
-      diamondTennisLocationUrl: process.env.NUXT_PUBLIC_DIAMOND_TENNIS_LOCATION_URL || '',
+      diamondTennisLocationUrl: process.env.NUXT_PUBLIC_DIAMOND_TENNIS_LOCATION_URL || 'https://www.google.com/maps/search/?api=1&query=42.61092,21.17710',
       diamondTennisInstagramUrl: process.env.NUXT_PUBLIC_DIAMOND_TENNIS_INSTAGRAM_URL || 'https://www.instagram.com/diamond.tennisacademy/',
-      diamondTennisFacebookUrl: process.env.NUXT_PUBLIC_DIAMOND_TENNIS_FACEBOOK_URL || ''
+      diamondTennisFacebookUrl: process.env.NUXT_PUBLIC_DIAMOND_TENNIS_FACEBOOK_URL || 'https://www.facebook.com/diamondtennisacademypr/'
     }
   },
 
   routeRules: {
-    '/': { prerender: true }
+    '/': { headers: { 'cache-control': 'no-store' } },
+    '/rezervo': { headers: { 'cache-control': 'no-store' } },
+    '/fushat/**': { headers: { 'cache-control': 'no-store' } },
+    '/dashboard/**': { headers: { 'cache-control': 'no-store' } },
+    '/kalendari/**': { headers: { 'cache-control': 'no-store' } },
+    '/rezervimet/**': { headers: { 'cache-control': 'no-store' } },
+    '/menaxhimi/**': { headers: { 'cache-control': 'no-store' } },
+    '/stafi/**': { headers: { 'cache-control': 'no-store' } },
+    '/raportet/**': { headers: { 'cache-control': 'no-store' } },
+    '/api/**': { headers: { 'cache-control': 'no-store' } }
   },
 
   compatibilityDate: '2026-06-30',
@@ -42,6 +51,9 @@ export default defineNuxtConfig({
   },
 
   supabase: {
+    url: process.env.NUXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL,
+    key: process.env.NUXT_PUBLIC_SUPABASE_KEY || process.env.SUPABASE_KEY || process.env.SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_ANON_KEY,
+    secretKey: process.env.NUXT_SUPABASE_SECRET_KEY || process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY,
     redirectOptions: {
       login: '/login',
       callback: '/confirm',

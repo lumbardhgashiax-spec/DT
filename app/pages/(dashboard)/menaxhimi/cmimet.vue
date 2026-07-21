@@ -1,9 +1,12 @@
 <script setup lang="ts">
-import type { TableRow } from '~/types/database.types'
+import { getPaginationRowModel } from '@tanstack/vue-table'
+import type { TableColumn } from '@nuxt/ui'
+import { h, resolveComponent } from 'vue'
+import type { PriceRuleView } from '~/types/dashboard'
 import { formatCurrency } from '~/utils/dashboard'
 
 definePageMeta({ layout: 'dashboard' })
-useSeoMeta({ title: 'Çmimet | Diamond Tennis Academy', robots: 'noindex, nofollow' })
+useSeoMeta({ title: 'Cmimet | Diamond Tennis Academy', robots: 'noindex, nofollow' })
 
 const dashboardApi = useDashboardApi()
 const toast = useToast()
@@ -11,8 +14,12 @@ const { canManagePricing, loadProfile } = useDashboardProfile()
 await loadProfile()
 
 const modalOpen = ref(false)
+const confirmOpen = ref(false)
 const saving = ref(false)
+const deleting = ref(false)
 const editingId = ref<string | null>(null)
+const priceToDelete = ref<PriceRuleView | null>(null)
+const pagination = ref({ pageIndex: 0, pageSize: 10 })
 const form = reactive({ seasonId: '', courtType: 'indoor' as 'indoor' | 'outdoor', price: 0, isActive: true })
 
 const { data, status, error, refresh } = await useAsyncData('price-management', async () => {
@@ -20,13 +27,17 @@ const { data, status, error, refresh } = await useAsyncData('price-management', 
   return { seasons, prices }
 })
 
+const UBadge = resolveComponent('UBadge')
+const UButton = resolveComponent('UButton')
+const UTooltip = resolveComponent('UTooltip')
+
 function openCreate() {
   editingId.value = null
   Object.assign(form, { seasonId: data.value?.seasons.find(item => item.is_active)?.id || '', courtType: 'indoor', price: 0, isActive: true })
   modalOpen.value = true
 }
 
-function openEdit(item: TableRow<'price_rules'>) {
+function openEdit(item: PriceRuleView) {
   editingId.value = item.id
   Object.assign(form, { seasonId: item.season_id, courtType: item.court_type, price: Number(item.price), isActive: item.is_active })
   modalOpen.value = true
@@ -35,35 +46,90 @@ function openEdit(item: TableRow<'price_rules'>) {
 async function save() {
   if (!canManagePricing.value || saving.value) return
   if (!form.seasonId || form.price < 0) {
-    toast.add({ title: 'Plotëso të dhënat e çmimit', color: 'warning' })
+    toast.add({ title: 'Ploteso te dhenat e cmimit', color: 'warning' })
     return
   }
 
   saving.value = true
   try {
     await dashboardApi.savePrice({ id: editingId.value || undefined, seasonId: form.seasonId, courtType: form.courtType, price: form.price, isActive: form.isActive })
-    toast.add({ title: editingId.value ? 'Çmimi u përditësua' : 'Çmimi u shtua', color: 'success' })
+    toast.add({ title: editingId.value ? 'Cmimi u perditesua' : 'Cmimi u shtua', color: 'success' })
     modalOpen.value = false
     await refresh()
   } catch (cause) {
-    toast.add({ title: 'Ruajtja dështoi', description: cause instanceof Error ? cause.message : 'Kontrollo të dhënat.', color: 'error' })
+    toast.add({ title: 'Ruajtja deshtoi', description: cause instanceof Error ? cause.message : 'Kontrollo te dhenat.', color: 'error' })
   } finally {
     saving.value = false
   }
 }
 
-async function deletePrice(item: TableRow<'price_rules'>) {
-  if (!canManagePricing.value || !import.meta.client) return
-  if (!window.confirm('A je i sigurt qe deshiron ta fshish kete cmim?')) return
+function askDeletePrice(item: PriceRuleView) {
+  if (!canManagePricing.value) return
+  priceToDelete.value = item
+  confirmOpen.value = true
+}
 
+async function deletePrice() {
+  if (!canManagePricing.value || !priceToDelete.value || deleting.value) return
+  deleting.value = true
   try {
-    await dashboardApi.deletePrice(item.id)
+    await dashboardApi.deletePrice(priceToDelete.value.id)
     toast.add({ title: 'Cmimi u fshi', color: 'success' })
+    confirmOpen.value = false
+    priceToDelete.value = null
     await refresh()
   } catch (cause) {
     toast.add({ title: 'Cmimi nuk u fshi', description: cause instanceof Error ? cause.message : 'Provo perseri.', color: 'error' })
+  } finally {
+    deleting.value = false
   }
 }
+
+const columns: TableColumn<PriceRuleView>[] = [
+  {
+    id: 'season',
+    header: 'Sezoni',
+    cell: ({ row }) => h('div', [
+      h('p', { class: 'font-medium text-highlighted' }, row.original.seasons?.name || 'Pa sezon'),
+      h('p', { class: 'text-xs text-muted' }, row.original.court_type === 'indoor' ? 'Fushe e mbyllur' : 'Fushe e hapur')
+    ])
+  },
+  {
+    accessorKey: 'price',
+    header: 'Cmimi',
+    meta: { class: { th: 'text-right', td: 'text-right font-semibold text-highlighted' } },
+    cell: ({ row }) => formatCurrency(row.original.price)
+  },
+  {
+    accessorKey: 'is_active',
+    header: 'Statusi',
+    cell: ({ row }) => h(UBadge, { color: row.original.is_active ? 'success' : 'neutral', variant: 'subtle' }, () => row.original.is_active ? 'Aktiv' : 'Joaktiv')
+  },
+  {
+    id: 'actions',
+    header: '',
+    meta: { class: { th: 'w-24', td: 'text-right' } },
+    cell: ({ row }) => h('div', { class: 'flex justify-end gap-1' }, [
+      h(UTooltip, { text: 'Ndrysho' }, () => h(UButton, {
+        'color': 'neutral',
+        'variant': 'ghost',
+        'icon': 'i-lucide-pencil',
+        'aria-label': 'Ndrysho cmimin',
+        'disabled': !canManagePricing.value,
+        'onClick': () => openEdit(row.original)
+      })),
+      canManagePricing.value
+        ? h(UTooltip, { text: 'Fshi' }, () => h(UButton, {
+            'color': 'error',
+            'variant': 'ghost',
+            'icon': 'i-lucide-trash-2',
+            'aria-label': 'Fshi cmimin',
+            'onClick': () => askDeletePrice(row.original)
+          }))
+        : null
+    ])
+  }
+]
 </script>
 
 <template>
@@ -74,10 +140,10 @@ async function deletePrice(item: TableRow<'price_rules'>) {
           Menaxhimi
         </p>
         <h1 class="dashboard-page-title">
-          Çmimet
+          Cmimet
         </h1>
         <p class="dashboard-page-description">
-          Përcakto çmimet bazë sipas sezonit, llojit të fushës dhe kohëzgjatjes.
+          Percakto cmimet baze sipas sezonit, llojit te fushes dhe kohezgjatjes.
         </p>
       </div>
       <UButton
@@ -87,7 +153,7 @@ async function deletePrice(item: TableRow<'price_rules'>) {
         :disabled="!data?.seasons.length"
         @click="openCreate"
       >
-        Shto çmim
+        Shto cmim
       </UButton>
     </header>
 
@@ -96,98 +162,47 @@ async function deletePrice(item: TableRow<'price_rules'>) {
       color="warning"
       variant="subtle"
       icon="i-lucide-shield-alert"
-      title="Qasje vetëm për lexim"
-      description="Vetëm admin dhe superadmin mund t’i ndryshojnë çmimet."
+      title="Qasje vetem per lexim"
+      description="Vetem admin dhe superadmin mund t'i ndryshojne cmimet."
     />
     <UAlert
       v-if="!data?.seasons.length && status !== 'pending'"
       color="info"
       variant="subtle"
       icon="i-lucide-sun-snow"
-      title="Krijo fillimisht një sezon"
-      description="Çdo çmim duhet të lidhet me një sezon."
+      title="Krijo fillimisht nje sezon"
+      description="Cdo cmim duhet te lidhet me nje sezon."
       :actions="[{ label: 'Menaxho sezonet', to: '/menaxhimi/sezonet', color: 'neutral', variant: 'outline' }]"
     />
     <UAlert
       v-if="error"
       color="error"
       variant="subtle"
-      title="Të dhënat nuk u ngarkuan"
+      title="Te dhenat nuk u ngarkuan"
       :description="error.message"
     />
 
     <section class="overflow-hidden rounded-2xl border border-default bg-white shadow-xs dark:bg-slate-900">
-      <div
-        v-if="status === 'pending'"
-        class="space-y-3 p-6"
-      >
-        <USkeleton
-          v-for="item in 4"
-          :key="item"
-          class="h-16 rounded-xl"
-        />
-      </div>
-      <div
-        v-else
-        class="divide-y divide-default"
-      >
-        <article
-          v-for="item in data?.prices"
-          :key="item.id"
-          class="grid gap-4 p-5 sm:grid-cols-[1fr_auto_auto] sm:items-center"
-        >
-          <div>
-            <div class="flex flex-wrap items-center gap-2">
-              <p class="dashboard-card-title">
-                {{ item.seasons?.name || 'Pa sezon' }}
-              </p>
-              <UBadge
-                :color="item.is_active ? 'success' : 'neutral'"
-                variant="subtle"
-              >
-                {{ item.is_active ? 'Aktiv' : 'Joaktiv' }}
-              </UBadge>
-            </div>
-            <p class="dashboard-meta mt-1">
-              {{ item.court_type === 'indoor' ? 'Fushë e mbyllur' : 'Fushë e hapur' }} · Çmim për 1 orë
-            </p>
-          </div>
-          <p class="text-lg font-bold text-highlighted">
-            {{ formatCurrency(item.price) }}
-          </p>
-          <div class="flex items-center gap-1">
-            <UButton
-              color="neutral"
-              variant="ghost"
-              icon="i-lucide-pencil"
-              aria-label="Ndrysho çmimin"
-              :disabled="!canManagePricing"
-              @click="openEdit(item)"
-            />
-            <UButton
-              v-if="canManagePricing"
-              color="error"
-              variant="ghost"
-              icon="i-lucide-trash-2"
-              aria-label="Fshi çmimin"
-              @click="deletePrice(item)"
-            />
-          </div>
-        </article>
-        <UEmpty
-          v-if="!data?.prices.length"
-          icon="i-lucide-badge-euro"
-          title="Nuk ka çmime"
-          description="Shto rregullin e parë të çmimit për rezervimet."
-          class="py-14"
-        />
-      </div>
+      <UTable
+        v-model:pagination="pagination"
+        :data="data?.prices || []"
+        :columns="columns"
+        :loading="status === 'pending'"
+        :pagination-options="{ getPaginationRowModel: getPaginationRowModel() }"
+        class="min-h-72"
+      />
+      <DashboardTablePagination
+        v-if="data?.prices.length"
+        v-model:page-index="pagination.pageIndex"
+        :page-size="pagination.pageSize"
+        :total="data.prices.length"
+      />
     </section>
 
     <UModal
       v-model:open="modalOpen"
-      :title="editingId ? 'Ndrysho çmimin' : 'Shto çmim'"
-      description="Rregulli përdoret për llogaritjen automatike të rezervimit."
+      :title="editingId ? 'Ndrysho cmimin' : 'Shto cmim'"
+      description="Rregulli perdoret per llogaritjen automatike te rezervimit."
     >
       <template #body>
         <form
@@ -206,21 +221,19 @@ async function deletePrice(item: TableRow<'price_rules'>) {
               class="w-full"
             />
           </UFormField>
-          <div class="grid gap-4 sm:grid-cols-2">
-            <UFormField
-              label="Lloji i fushës"
-              required
-            >
-              <USelect
-                v-model="form.courtType"
-                :items="[{ label: 'E mbyllur', value: 'indoor' }, { label: 'E hapur', value: 'outdoor' }]"
-                value-key="value"
-                class="w-full"
-              />
-            </UFormField>
-          </div>
           <UFormField
-            label="Çmimi për 1 orë në EUR"
+            label="Lloji i fushes"
+            required
+          >
+            <USelect
+              v-model="form.courtType"
+              :items="[{ label: 'E mbyllur', value: 'indoor' }, { label: 'E hapur', value: 'outdoor' }]"
+              value-key="value"
+              class="w-full"
+            />
+          </UFormField>
+          <UFormField
+            label="Cmimi per 1 ore ne EUR"
             required
           >
             <UInput
@@ -256,5 +269,15 @@ async function deletePrice(item: TableRow<'price_rules'>) {
         </div>
       </template>
     </UModal>
+
+    <DashboardConfirmActionModal
+      v-model:open="confirmOpen"
+      title="Fshi cmimin?"
+      description="Cmimi do te fshihet pergjithmone. Rezervimet ekzistuese nuk ndryshohen."
+      confirm-label="Fshi cmimin"
+      confirm-icon="i-lucide-trash-2"
+      :loading="deleting"
+      @confirm="deletePrice"
+    />
   </div>
 </template>

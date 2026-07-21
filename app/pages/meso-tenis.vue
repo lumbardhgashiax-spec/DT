@@ -60,7 +60,7 @@ const practice = [
 
 const preparation = [
   { icon: 'i-lucide-shirt', title: 'Veshje per levizje', copy: 'Atlete sportive dhe veshje te rehatshme.' },
-  { icon: 'i-lucide-droplets', title: 'Uje me vete', copy: 'Bej pushime te shkurtra dhe hidratoju.' },
+  { icon: 'i-lucide-droplets', title: 'Uje me vete', copy: 'Bej pushime te shkurtra dhe hidratohu.' },
   { icon: 'i-lucide-clock-3', title: 'Eja pak me heret', copy: 'Ke kohe te pergatitesh para fillimit te terminit.' }
 ]
 

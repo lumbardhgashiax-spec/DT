@@ -19,10 +19,12 @@ await loadProfile()
 
 const modalOpen = ref(false)
 const deleteModalOpen = ref(false)
+const courtDeleteOpen = ref(false)
 const saving = ref(false)
 const deleting = ref(false)
 const editingId = ref<string | null>(null)
 const imageToDelete = ref<CourtImage | null>(null)
+const courtToDelete = ref<CourtWithImages | null>(null)
 const selectedFiles = ref<File[]>([])
 const form = reactive({ name: '', type: 'indoor' as 'indoor' | 'outdoor', latitude: '', longitude: '', isActive: true })
 
@@ -119,6 +121,7 @@ async function save() {
 
 function confirmImageDelete(image: CourtImage) {
   imageToDelete.value = image
+  courtToDelete.value = null
   deleteModalOpen.value = true
 }
 
@@ -140,20 +143,30 @@ async function deleteImage() {
   }
 }
 
-async function deleteCourt(court: CourtWithImages) {
-  if (!canManagePricing.value || !import.meta.client) return
-  if (!window.confirm(`A je i sigurt qe deshiron ta fshish fushen "${court.name}"? Ky veprim nuk mund te kthehet.`)) return
+function confirmCourtDelete(court: CourtWithImages) {
+  if (!canManagePricing.value) return
+  courtToDelete.value = court
+  imageToDelete.value = null
+  courtDeleteOpen.value = true
+}
 
+async function deleteCourt() {
+  if (!canManagePricing.value || !courtToDelete.value || deleting.value) return
+  deleting.value = true
   try {
-    const result = await dashboardApi.deleteCourt(court.id)
+    const result = await dashboardApi.deleteCourt(courtToDelete.value.id)
     toast.add({
       title: 'Fusha u fshi',
       description: result.storageCleanupFailed ? 'Fusha u fshi, por disa fotografi duhen pastruar nga Storage.' : undefined,
       color: result.storageCleanupFailed ? 'warning' : 'success'
     })
+    courtDeleteOpen.value = false
+    courtToDelete.value = null
     await refresh()
   } catch (cause) {
     toast.add({ title: 'Fusha nuk u fshi', description: cause instanceof Error ? cause.message : 'Provo perseri.', color: 'error' })
+  } finally {
+    deleting.value = false
   }
 }
 </script>
@@ -278,7 +291,7 @@ async function deleteCourt(court: CourtWithImages) {
                 variant="ghost"
                 icon="i-lucide-trash-2"
                 aria-label="Fshi fushën"
-                @click="deleteCourt(court)"
+                @click="confirmCourtDelete(court)"
               />
             </div>
           </div>
@@ -470,5 +483,15 @@ async function deleteCourt(court: CourtWithImages) {
         </div>
       </template>
     </UModal>
+
+    <DashboardConfirmActionModal
+      v-model:open="courtDeleteOpen"
+      title="Fshi fushen?"
+      :description="`Fusha '${courtToDelete?.name || ''}' dhe fotografite e saj do te fshihen pergjithmone. Ky veprim nuk mund te kthehet.`"
+      confirm-label="Fshi fushen"
+      confirm-icon="i-lucide-trash-2"
+      :loading="deleting"
+      @confirm="deleteCourt"
+    />
   </div>
 </template>
