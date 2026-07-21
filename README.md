@@ -30,8 +30,9 @@ The existing database overlap constraint remains the final protection against
 double-booking.
 
 `NUXT_SUPABASE_SECRET_KEY` is required only on the server. In Vercel you can
-also use `SUPABASE_SECRET_KEY` or `SUPABASE_SERVICE_ROLE_KEY`; the app reads all
-three names. Never expose this key in the browser, a public environment
+also use `SUPABASE_SECRET_KEY`, `SUPABASE_SERVICE_ROLE_KEY`,
+`NUXT_SUPABASE_SERVICE_KEY`, or `SUPABASE_SERVICE_KEY`; the app reads all of
+these names. Never expose this key in the browser, a public environment
 variable, or git. If it is missing in production, `/api/public/*` booking routes
 return `503` and public courts will not load. The public API also has a small
 process-local rate limit; production should additionally use an edge/WAF rate
@@ -70,6 +71,7 @@ NUXT_OPENROUTER_SITE_NAME=Diamond Tennis Academy
 For Vercel, set those variables for the Production environment and redeploy
 without build cache. Public pages are rendered at runtime; the home page is not
 prerendered so it does not ship stale `_payload.json` data after a deploy.
+After deploy, `/api/public/health` returns non-secret checks for the booking API.
 
 Optional public links and canonical URL are also documented in
 `.env.example`.

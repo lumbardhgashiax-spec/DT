@@ -4,6 +4,8 @@ import type { H3Event } from 'h3'
 import { serverSupabaseServiceRole } from '#supabase/server'
 import type { Database, TableRow } from '~/types/database.types'
 
+declare const process: { env: Record<string, string | undefined> }
+
 export const ACADEMY_TIME_ZONE = 'Europe/Belgrade'
 export const PUBLIC_OPENING_HOUR = 10
 export const PUBLIC_CLOSING_HOUR = 22
@@ -212,7 +214,35 @@ export function setPublicResponseHeaders(event: H3Event) {
   setResponseHeader(event, 'x-content-type-options', 'nosniff')
 }
 
+export function publicBookingEnvironmentStatus() {
+  return {
+    supabaseUrl: Boolean(process.env.NUXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL),
+    supabasePublicKey: Boolean(
+      process.env.NUXT_PUBLIC_SUPABASE_KEY
+      || process.env.SUPABASE_KEY
+      || process.env.SUPABASE_PUBLISHABLE_KEY
+      || process.env.SUPABASE_ANON_KEY
+    ),
+    supabaseServerKey: Boolean(
+      process.env.NUXT_SUPABASE_SECRET_KEY
+      || process.env.SUPABASE_SECRET_KEY
+      || process.env.SUPABASE_SERVICE_ROLE_KEY
+      || process.env.NUXT_SUPABASE_SERVICE_KEY
+      || process.env.SUPABASE_SERVICE_KEY
+    )
+  }
+}
+
 export async function requirePublicBookingService(event: H3Event): Promise<PublicServiceClient> {
+  const environment = publicBookingEnvironmentStatus()
+  if (!environment.supabaseUrl || !environment.supabasePublicKey || !environment.supabaseServerKey) {
+    console.error('[public-booking] Missing Supabase environment variable:', environment)
+    throw createError({
+      statusCode: 503,
+      statusMessage: 'Shërbimi i rezervimeve nuk është i disponueshëm tani.'
+    })
+  }
+
   try {
     // Public booking requests stay on the server. The service role key is never
     // exposed to the browser, and it lets this controlled API write through RLS.
