@@ -107,8 +107,54 @@ export interface PublicBookingConfirmation {
   createdAt: string
 }
 
+type PublicReservationInsert = Database['public']['Tables']['reservations']['Insert']
+type InsertedPublicReservation = Pick<TableRow<'reservations'>, 'id' | 'created_at'> & {
+  booking_reference?: string | null
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+function logPublicBookingDatabaseError(step: string, error: unknown) {
+  console.error(`[public-booking] ${step} failed:`, error)
+}
+
+export function isMissingBookingReferenceColumn(error: unknown) {
+  if (!isRecord(error)) return false
+
+  const code = typeof error.code === 'string' ? error.code : ''
+  const message = [
+    error.message,
+    error.details,
+    error.hint
+  ]
+    .filter((item): item is string => typeof item === 'string')
+    .join(' ')
+    .toLowerCase()
+
+  return message.includes('booking_reference') && (
+    code === 'PGRST204'
+    || code === '42703'
+    || message.includes('schema cache')
+    || message.includes('column')
+  )
+}
+
+function isBookingReferenceCollision(error: unknown) {
+  if (!isRecord(error)) return false
+
+  const code = typeof error.code === 'string' ? error.code : ''
+  const message = [
+    error.message,
+    error.details,
+    error.hint
+  ]
+    .filter((item): item is string => typeof item === 'string')
+    .join(' ')
+    .toLowerCase()
+
+  return code === '23505' && message.includes('booking_reference')
 }
 
 function databaseError(message = 'Shërbimi i rezervimeve nuk është i disponueshëm tani.') {
@@ -206,6 +252,18 @@ function normalizePrice(value: unknown) {
   const price = Number(value)
   if (!Number.isFinite(price) || price < 0) throw databaseError('Një çmim aktiv nuk është i rregulluar si duhet.')
   return Math.round(price * 100) / 100
+}
+
+function publicBookingReference() {
+  const now = academyDateParts(new Date())
+  const datePart = [
+    now.year.toString().slice(-2),
+    now.month.toString().padStart(2, '0'),
+    now.day.toString().padStart(2, '0')
+  ].join('')
+  const randomPart = Math.random().toString(36).slice(2, 8).toUpperCase()
+
+  return `DT-${datePart}-${randomPart}`
 }
 
 export function setPublicResponseHeaders(event: H3Event) {
@@ -522,29 +580,68 @@ export async function createPublicBooking(
     .select('id')
     .single()
 
-  if (customerError || !customer) throw databaseError('Të dhënat e klientit nuk mund të ruheshin.')
+  if (customerError || !customer) {
+    logPublicBookingDatabaseError('customer insert', customerError)
+    throw databaseError('Të dhënat e klientit nuk mund të ruheshin.')
+  }
 
   try {
-    const { data: reservation, error: reservationError } = await client
-      .from('reservations')
-      .insert({
-        customer_id: customer.id,
-        court_id: quote.courtId,
-        season_id: quote.seasonId,
-        price_rule_id: quote.priceRuleId,
-        start_at: startAt,
-        end_at: endAt,
-        with_heating: false,
-        status: 'confirmed',
-        price: quote.totalPrice,
-        notes: null,
-        created_by: null
-      })
-      .select('id, booking_reference, created_at')
-      .single()
+    const reservationPayload: PublicReservationInsert = {
+      customer_id: customer.id,
+      court_id: quote.courtId,
+      season_id: quote.seasonId,
+      price_rule_id: quote.priceRuleId,
+      start_at: startAt,
+      end_at: endAt,
+      with_heating: false,
+      status: 'confirmed',
+      price: quote.totalPrice,
+      notes: null,
+      created_by: null
+    }
 
-    if (reservationError || !reservation) {
-      if (reservationError?.code === '23P01') {
+    let reservation: InsertedPublicReservation | null = null
+    let reservationError: unknown = null
+
+    for (let attempt = 0; attempt < 3 && !reservation; attempt += 1) {
+      const result = await client
+        .from('reservations')
+        .insert({
+          ...reservationPayload,
+          booking_reference: publicBookingReference()
+        })
+        .select('id, booking_reference, created_at')
+        .single()
+
+      if (result.data) {
+        reservation = result.data
+        break
+      }
+
+      reservationError = result.error
+      if (!isBookingReferenceCollision(result.error)) break
+    }
+
+    if (!reservation && isMissingBookingReferenceColumn(reservationError)) {
+      const fallbackResult = await client
+        .from('reservations')
+        .insert(reservationPayload)
+        .select('id, created_at')
+        .single()
+
+      if (fallbackResult.data) {
+        reservation = {
+          ...fallbackResult.data,
+          booking_reference: fallbackResult.data.id
+        }
+      } else {
+        reservationError = fallbackResult.error
+      }
+    }
+
+    if (!reservation) {
+      logPublicBookingDatabaseError('reservation insert', reservationError)
+      if (isRecord(reservationError) && reservationError.code === '23P01') {
         throw createError({
           statusCode: 409,
           statusMessage: 'Ky termin sapo u rezervua. Zgjidh një orë tjetër.'
@@ -555,7 +652,7 @@ export async function createPublicBooking(
 
     return {
       reference: reservation.id,
-      bookingReference: reservation.booking_reference,
+      bookingReference: reservation.booking_reference || reservation.id,
       courtName: quote.courtName,
       date: input.date,
       time: input.time,

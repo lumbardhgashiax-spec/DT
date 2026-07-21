@@ -3,6 +3,7 @@ import {
   ACADEMY_TIME_ZONE,
   academyDateFromIso,
   academyTimeFromIso,
+  isMissingBookingReferenceColumn,
   requirePublicBookingService,
   requirePublicUuid,
   setPublicResponseHeaders
@@ -33,11 +34,29 @@ export default defineEventHandler(async (event) => {
 
   const reference = requirePublicUuid(getQuery(event).reference, 'Referenca e rezervimit nuk është valide.')
   const client = await requirePublicBookingService(event)
-  const { data: reservation, error: reservationError } = await client
+  const reservationResult = await client
     .from('reservations')
     .select('id, booking_reference, court_id, start_at, end_at, status')
     .eq('id', reference)
     .maybeSingle()
+  let reservation = reservationResult.data
+  let reservationError = reservationResult.error
+
+  if (reservationError && isMissingBookingReferenceColumn(reservationError)) {
+    const fallbackResult = await client
+      .from('reservations')
+      .select('id, court_id, start_at, end_at, status')
+      .eq('id', reference)
+      .maybeSingle()
+
+    reservation = fallbackResult.data
+      ? {
+          ...fallbackResult.data,
+          booking_reference: fallbackResult.data.id
+        }
+      : null
+    reservationError = fallbackResult.error
+  }
 
   if (reservationError) {
     throw createError({ statusCode: 500, statusMessage: 'Kalendari nuk mund të përgatitet tani.' })
@@ -57,7 +76,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 500, statusMessage: 'Kalendari nuk mund të përgatitet tani.' })
   }
 
-  const displayReference = reservation.booking_reference
+  const displayReference = reservation.booking_reference || reservation.id
   const calendarFile = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',

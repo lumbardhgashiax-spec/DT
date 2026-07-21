@@ -2,6 +2,7 @@ import { createError, getQuery } from 'h3'
 import {
   academyDateFromIso,
   academyTimeFromIso,
+  isMissingBookingReferenceColumn,
   requirePublicBookingService,
   requirePublicUuid,
   setPublicResponseHeaders
@@ -14,11 +15,29 @@ export default defineEventHandler(async (event) => {
 
   const reference = requirePublicUuid(getQuery(event).reference, 'Referenca e rezervimit nuk \u00ebsht\u00eb valide.')
   const client = await requirePublicBookingService(event)
-  const { data: reservation, error: reservationError } = await client
+  const reservationResult = await client
     .from('reservations')
     .select('id, booking_reference, court_id, start_at, end_at, price, status, created_at')
     .eq('id', reference)
     .maybeSingle()
+  let reservation = reservationResult.data
+  let reservationError = reservationResult.error
+
+  if (reservationError && isMissingBookingReferenceColumn(reservationError)) {
+    const fallbackResult = await client
+      .from('reservations')
+      .select('id, court_id, start_at, end_at, price, status, created_at')
+      .eq('id', reference)
+      .maybeSingle()
+
+    reservation = fallbackResult.data
+      ? {
+          ...fallbackResult.data,
+          booking_reference: fallbackResult.data.id
+        }
+      : null
+    reservationError = fallbackResult.error
+  }
 
   if (reservationError) {
     throw createError({
@@ -60,7 +79,7 @@ export default defineEventHandler(async (event) => {
 
   return {
     reference: reservation.id,
-    bookingReference: reservation.booking_reference,
+    bookingReference: reservation.booking_reference || reservation.id,
     courtName: court.name,
     date: academyDateFromIso(reservation.start_at),
     time: academyTimeFromIso(reservation.start_at),
