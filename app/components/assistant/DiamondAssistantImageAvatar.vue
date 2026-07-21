@@ -47,7 +47,6 @@ const imageSize = computed(() => {
         alt="Diamond Concierge"
         loading="lazy"
         decoding="async"
-        @error="($event.target as HTMLImageElement).src = assistantConfig.assets.fallback"
       >
     </picture>
     <span

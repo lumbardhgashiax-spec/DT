@@ -14,6 +14,10 @@ export default defineNuxtConfig({
     // Keep false unless the reverse proxy is known to overwrite
     // X-Forwarded-For with the actual visitor IP.
     bookingTrustProxy: process.env.NUXT_BOOKING_TRUST_PROXY === 'true',
+    openRouterApiKey: process.env.NUXT_OPENROUTER_API_KEY || '',
+    openRouterModel: process.env.NUXT_OPENROUTER_MODEL || 'openai/gpt-4o',
+    openRouterSiteUrl: process.env.NUXT_OPENROUTER_SITE_URL || process.env.NUXT_PUBLIC_SITE_URL || '',
+    openRouterSiteName: process.env.NUXT_OPENROUTER_SITE_NAME || 'Diamond Tennis Academy',
     public: {
       siteUrl: process.env.NUXT_PUBLIC_SITE_URL || '',
       diamondTennisLocationUrl: process.env.NUXT_PUBLIC_DIAMOND_TENNIS_LOCATION_URL || '',

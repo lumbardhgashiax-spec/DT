@@ -44,10 +44,10 @@ internet.
 
 ## Diamond Assistant
 
-The public assistant interface is included, but it intentionally returns a
-clear maintenance response until an AI provider and its server-only credential
-are configured. No AI credential is required for the website or booking flow,
-and no placeholder answer is presented as real information.
+The public assistant calls OpenRouter only from Nuxt server routes. The browser
+never receives the OpenRouter key. If `NUXT_OPENROUTER_API_KEY` is missing, the
+assistant stays in maintenance mode and does not present placeholder answers as
+real information.
 
 ## Setup
 
@@ -57,6 +57,10 @@ Copy `.env.example` to `.env`, then configure at minimum:
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_KEY=your-publishable-or-anon-key
 NUXT_SUPABASE_SECRET_KEY=your-server-only-secret-key
+NUXT_OPENROUTER_API_KEY=your-openrouter-key
+NUXT_OPENROUTER_MODEL=openai/gpt-4o
+NUXT_OPENROUTER_SITE_URL=https://your-site.com
+NUXT_OPENROUTER_SITE_NAME=Diamond Tennis Academy
 ```
 
 Optional public links and canonical URL are also documented in

@@ -6,10 +6,8 @@ export const assistantConfig = {
   assets: {
     desktop: '/assistant/diamond-assistant.webp',
     mobile: '/assistant/diamond-assistant-mobile.webp',
-    poster: '/assistant/diamond-assistant-poster.webp',
-    fallback: '/AI Assistant - Diamond Tennis.png'
+    poster: '/assistant/diamond-assistant-poster.webp'
   },
-  modelPath: '/models/diamond-assistant.glb',
   excludedRoutePatterns: [
     /^\/admin(?:\/|$)/,
     /^\/staff(?:\/|$)/,
