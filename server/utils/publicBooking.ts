@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { createError, setResponseHeader } from 'h3'
 import type { H3Event } from 'h3'
-import { serverSupabaseClient } from '#supabase/server'
+import { serverSupabaseServiceRole } from '#supabase/server'
 import type { Database, TableRow } from '~/types/database.types'
 
 export const ACADEMY_TIME_ZONE = 'Europe/Belgrade'
@@ -214,10 +214,9 @@ export function setPublicResponseHeaders(event: H3Event) {
 
 export async function requirePublicBookingService(event: H3Event): Promise<PublicServiceClient> {
   try {
-    // Public booking requests stay on the server. This client uses the existing
-    // SUPABASE_URL and SUPABASE_KEY runtime configuration, never browser-side
-    // Supabase calls or embedded credentials.
-    return await serverSupabaseClient<Database>(event)
+    // Public booking requests stay on the server. The service role key is never
+    // exposed to the browser, and it lets this controlled API write through RLS.
+    return serverSupabaseServiceRole<Database>(event)
   } catch {
     throw createError({
       statusCode: 503,
