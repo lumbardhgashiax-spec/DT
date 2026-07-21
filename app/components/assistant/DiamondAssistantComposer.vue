@@ -74,7 +74,7 @@ watch(message, () => nextTick(resize))
         ref="textareaRef"
         v-model="message"
         rows="1"
-        placeholder="Shkruaj per rezervim, fusha ose lokacion..."
+        placeholder="Si mund te ju ndihmoj sot?"
         aria-label="Mesazhi per Diamond Concierge"
         :disabled="status === 'thinking'"
         @keydown="onKeydown"

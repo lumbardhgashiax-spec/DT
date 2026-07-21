@@ -12,7 +12,7 @@
       </span>
       <h2>Si mund te te ndihmoj?</h2>
       <p>
-        Shkruaj per rezervim, fushat, orarin ose lokacionin e Diamond Tennis Academy.
+        Me trego diten dhe oren qe te pershtatet. Mund te kontrolloj terminet e lira dhe ta perfundoj rezervimin me konfirmimin tend.
       </p>
     </div>
   </section>

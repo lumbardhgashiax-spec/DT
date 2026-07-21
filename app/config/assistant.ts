@@ -16,5 +16,5 @@ export const assistantConfig = {
     /^\/export(?:\/|$)/,
     /^\/pdf(?:\/|$)/
   ],
-  welcomeBubble: 'Pershendetje. A te ndihmoj te rezervosh nje fushe?'
+  welcomeBubble: 'Pershendetje. Te ndihmoj me gjet nje termin te lire?'
 } as const
