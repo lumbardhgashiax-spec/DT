@@ -60,6 +60,10 @@ interface OpenRouterResponse {
   }>
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
 function normalizedHistory(value: unknown): OpenRouterMessage[] {
   if (!Array.isArray(value)) return []
 
@@ -88,6 +92,34 @@ function parseToolArguments(value: string) {
   } catch {
     return {}
   }
+}
+
+function createdBookingMessage(result: unknown) {
+  if (!isRecord(result) || result.ok !== true || !isRecord(result.confirmation)) return null
+
+  const confirmation = result.confirmation
+  const bookingReference = typeof confirmation.bookingReference === 'string'
+    ? confirmation.bookingReference
+    : typeof confirmation.reference === 'string'
+      ? confirmation.reference
+      : ''
+  const courtName = typeof confirmation.courtName === 'string' ? confirmation.courtName : 'fusha e zgjedhur'
+  const date = typeof confirmation.date === 'string' ? confirmation.date : ''
+  const time = typeof confirmation.time === 'string' ? confirmation.time : ''
+  const endTime = typeof confirmation.endTime === 'string' ? confirmation.endTime : ''
+  const totalPrice = Number(confirmation.totalPrice)
+  const priceText = Number.isFinite(totalPrice) ? `${totalPrice.toFixed(2)} EUR` : 'sipas cmimit te konfirmuar'
+
+  return [
+    'Rezervimi u krijua me sukses.',
+    '',
+    `Referenca: ${bookingReference}`,
+    `Fusha: ${courtName}`,
+    `Termini: ${date}${time ? `, ${time}${endTime ? ` - ${endTime}` : ''}` : ''}`,
+    `Totali: ${priceText}`,
+    '',
+    'Kete reference tregoja stafit administrativ kur te arrish. Mos harro: raketen dhe topat duhet t\'i sillni vete, pervec nese stafi ju konfirmon ndryshe.'
+  ].join('\n')
 }
 
 async function requestOpenRouter(
@@ -142,7 +174,7 @@ export default defineEventHandler(async (event): Promise<AssistantApiResponse> =
       { role: 'user', content: message }
     ]
 
-    for (let round = 0; round < 4; round += 1) {
+    for (let round = 0; round < 6; round += 1) {
       const response = await requestOpenRouter(config, messages)
       const assistantMessage = response.choices?.[0]?.message
       if (!assistantMessage) throw new Error('OpenRouter returned an empty response.')
@@ -169,6 +201,14 @@ export default defineEventHandler(async (event): Promise<AssistantApiResponse> =
           name: toolCall.function.name,
           arguments: parseToolArguments(toolCall.function.arguments)
         }, message, conversationHistory)
+        const createdMessage = toolCall.function.name === 'create_booking' ? createdBookingMessage(result) : null
+
+        if (createdMessage) {
+          return {
+            provider: 'openrouter',
+            message: createdMessage
+          }
+        }
 
         messages.push({
           role: 'tool',
@@ -180,7 +220,9 @@ export default defineEventHandler(async (event): Promise<AssistantApiResponse> =
     }
 
     throw new Error('OpenRouter used too many tool rounds.')
-  } catch {
+  } catch (error) {
+    console.error('[assistant] message failed:', error)
+
     return {
       provider: 'unavailable',
       message: maintenanceMessage

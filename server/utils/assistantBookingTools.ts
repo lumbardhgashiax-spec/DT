@@ -80,16 +80,20 @@ function equipmentNote() {
 }
 
 function hasExplicitBookingConfirmation(message: string) {
-  return /\b(po|ok|dakord|konfirmoj|konfirmo|konfirmohet|beje|b(?:e|\u00eb)je|rezervoje|vazhdo|yes)\b/i.test(message)
+  return /\b(po|ok|dakord|konfirmoj|konfirmo|konfirmohet|confirm|confirmed|beje|b(?:e|\u00eb)je|rezervo|rezervoje|rregulloje|vazhdo|vazhdoje|yes)\b/i.test(message)
 }
 
 function hasPriorConfirmationRequest(history: AssistantHistoryMessage[]) {
-  return [...history].reverse().some(item => (
-    item.role === 'assistant'
-    && typeof item.content === 'string'
-    && /a e konfirmon/i.test(item.content)
-    && /(cmim|total|eur|\u20ac)/i.test(item.content)
-  ))
+  return [...history].reverse().slice(0, 6).some((item) => {
+    if (item.role !== 'assistant' || typeof item.content !== 'string') return false
+
+    const content = item.content.toLowerCase()
+    const asksForConfirmation = /(konfirm|ta rezervoj|ta bej|ta b\u00ebj|vazhdoj|a pajtohesh)/i.test(content)
+    const hasBookingContext = /(rezervim|termin|fushe|fush\u00eb|ora|date|dat\u00eb)/i.test(content)
+    const hasPriceContext = /(cmim|\u00e7mim|total|eur|\u20ac|\d+[,.]?\d*\s*(?:eur|\u20ac))/i.test(content)
+
+    return asksForConfirmation && hasBookingContext && hasPriceContext
+  })
 }
 
 function toolError(error: unknown) {
@@ -402,6 +406,8 @@ export async function executeAssistantBookingTool(
       message: 'Ky veprim nuk njihet nga asistenti.'
     }
   } catch (error) {
+    console.error(`[assistant-booking-tool] ${name} failed:`, error)
+
     return {
       ok: false,
       message: toolError(error)
