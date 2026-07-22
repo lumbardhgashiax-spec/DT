@@ -42,8 +42,8 @@
 }
 
 .public-site :focus-visible {
-  outline: 3px solid rgba(255, 112, 71, 0.62);
-  outline-offset: 3px;
+  outline: 2px solid var(--forest);
+  outline-offset: 2px;
 }
 
 /* Explicit public CTA style. This remains scoped to the public website and

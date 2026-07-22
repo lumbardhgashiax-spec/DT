@@ -27,11 +27,15 @@ const userInitial = computed(() => (
   profile.value?.full_name?.charAt(0) || user.value?.email?.charAt(0) || 'D'
 ).toUpperCase())
 
+const canViewReports = computed(() => Boolean(
+  profile.value?.is_active && ['admin', 'superadmin'].includes(profile.value.role)
+))
+
 function closeOnMobile() {
   if (import.meta.client && window.innerWidth < 1024) sidebarOpen.value = false
 }
 
-function navigationItems(state: 'collapsed' | 'expanded') {
+function navigationItems() {
   const managementChildren: NavigationMenuItem[] = [
     {
       label: 'Fushat',
@@ -94,24 +98,26 @@ function navigationItems(state: 'collapsed' | 'expanded') {
       active: route.path.startsWith('/rezervimet'),
       onSelect: closeOnMobile
     },
-    {
-      label: 'Raportet',
-      icon: 'i-lucide-chart-no-axes-combined',
-      to: '/raportet',
-      active: route.path.startsWith('/raportet'),
-      onSelect: closeOnMobile
-    },
+    ...(canViewReports.value
+      ? [{
+          label: 'Raportet',
+          icon: 'i-lucide-chart-no-axes-combined',
+          to: '/raportet',
+          active: route.path.startsWith('/raportet'),
+          onSelect: closeOnMobile
+        }]
+      : []),
     {
       label: 'Menaxhimi',
       icon: 'i-lucide-settings-2',
       defaultOpen: true,
-      children: state === 'expanded' ? managementChildren : []
+      children: managementChildren
     }
   ] satisfies NavigationMenuItem[]
 }
 
 const visibleNavigationItems = computed<NavigationMenuItem[]>(() => {
-  const items: NavigationMenuItem[] = navigationItems('expanded')
+  const items: NavigationMenuItem[] = navigationItems()
   const query = searchQuery.value.trim().toLocaleLowerCase('sq')
   if (!query) return items
 
@@ -180,10 +186,19 @@ const userMenuItems = computed<DropdownMenuItem[][]>(() => [
   ]
 ])
 
-onMounted(() => loadProfile())
+onMounted(() => {
+  loadProfile()
+
+  // The dashboard should start expanded after authentication on desktop.
+  // Keep the user's collapsed state while navigating inside the dashboard.
+  if (user.value?.id && window.innerWidth >= 1024) sidebarOpen.value = true
+})
 
 watch(() => user.value?.id, (currentId, previousId) => {
-  if (currentId !== previousId) loadProfile()
+  if (currentId !== previousId) {
+    loadProfile()
+    if (currentId && import.meta.client && window.innerWidth >= 1024) sidebarOpen.value = true
+  }
 })
 </script>
 
@@ -238,8 +253,11 @@ watch(() => user.value?.id, (currentId, previousId) => {
       />
       <UNavigationMenu
         :key="`${state}-${isSuperAdmin}`"
-        :items="state === 'expanded' ? visibleNavigationItems : navigationItems(state)"
+        :items="visibleNavigationItems"
         orientation="vertical"
+        :collapsed="state === 'collapsed'"
+        :popover="state === 'collapsed'"
+        tooltip
         :ui="{
           link: 'min-h-10 overflow-hidden rounded-lg px-3 text-sm',
           linkLeadingIcon: 'size-5',

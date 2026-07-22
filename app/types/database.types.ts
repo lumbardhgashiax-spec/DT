@@ -3,7 +3,6 @@ export type Json = string | number | boolean | null | { [key: string]: Json | un
 type Role = 'staff' | 'admin' | 'superadmin'
 type CourtType = 'outdoor' | 'indoor'
 type ReservationStatus = 'pending' | 'confirmed' | 'completed' | 'cancelled'
-type SeasonType = 'summer' | 'winter'
 
 export interface Database {
   public: {
@@ -39,9 +38,9 @@ export interface Database {
         Relationships: []
       }
       seasons: {
-        Row: { id: string, name: string, season_type: SeasonType, starts_on: string, ends_on: string, is_active: boolean, created_at: string, updated_at: string }
-        Insert: { id?: string, name: string, season_type: SeasonType, starts_on: string, ends_on: string, is_active?: boolean, created_at?: string, updated_at?: string }
-        Update: { name?: string, season_type?: SeasonType, starts_on?: string, ends_on?: string, is_active?: boolean, updated_at?: string }
+        Row: { id: string, name: string, starts_month: number, starts_day: number, ends_month: number, ends_day: number, is_active: boolean, created_at: string, updated_at: string }
+        Insert: { id?: string, name: string, starts_month: number, starts_day: number, ends_month: number, ends_day: number, is_active?: boolean, created_at?: string, updated_at?: string }
+        Update: { name?: string, starts_month?: number, starts_day?: number, ends_month?: number, ends_day?: number, is_active?: boolean, updated_at?: string }
         Relationships: []
       }
       price_rules: {
@@ -59,10 +58,6 @@ export interface Database {
     }
     Views: Record<string, never>
     Functions: {
-      cancel_reservation: {
-        Args: { p_reservation_id: string }
-        Returns: undefined
-      }
       upsert_reservation: {
         Args: {
           p_reservation_id: string | null

@@ -2,6 +2,10 @@
 const supabase = useSupabaseClient()
 const user = useSupabaseUser()
 const { loadProfile, profileError, resetProfile } = useDashboardProfile()
+const sidebarOpen = useCookie('dashboard-sidebar-open', {
+  default: () => true,
+  sameSite: 'lax'
+})
 
 const email = ref('')
 const password = ref('')
@@ -40,6 +44,8 @@ async function login() {
       return
     }
 
+    // Start every new dashboard session with the desktop sidebar expanded.
+    sidebarOpen.value = true
     await navigateTo('/dashboard')
   } catch {
     errorMessage.value = 'Hyrja nuk mund të kryhej. Provo përsëri.'

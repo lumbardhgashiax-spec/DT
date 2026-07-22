@@ -3,6 +3,7 @@ import type { ReservationView } from '~/types/dashboard'
 import type { TableRow } from '~/types/database.types'
 import { parseDate } from '@internationalized/date'
 import { combineLocalDateTime, formatCurrency, toLocalDateInput, toLocalTimeInput } from '~/utils/dashboard'
+import { recurringSeasonContains } from '~/utils/seasons'
 
 const props = defineProps<{
   open: boolean
@@ -52,8 +53,8 @@ const selectedCourt = computed(() => courts.value.find(court => court.id === for
 const selectedDate = computed(() => form.date ? new Date(`${form.date}T12:00:00`) : null)
 const activeSeason = computed(() => seasons.value.find((season) => {
   if (!selectedDate.value || !season.is_active) return false
-  const date = form.date
-  return date >= season.starts_on && date <= season.ends_on
+  const [, month, day] = form.date.split('-').map(Number)
+  return recurringSeasonContains(season, month || 0, day || 0)
 }))
 const matchingPriceRule = computed(() => priceRules.value.find(rule => (
   rule.is_active
@@ -78,7 +79,7 @@ const priceIssue = computed(() => {
   return ''
 })
 const customerSuggestions = computed(() => customers.value.slice(0, 100))
-const statusItems = [{ label: 'Në pritje', value: 'pending' }, { label: 'Konfirmuar', value: 'confirmed' }, { label: 'Përfunduar', value: 'completed' }, { label: 'Anuluar', value: 'cancelled' }]
+const statusItems = [{ label: 'Rezervim i ri', value: 'confirmed' }, { label: 'Përfunduar', value: 'completed' }, { label: 'Anuluar', value: 'cancelled' }]
 const courtItems = computed(() => courts.value.map(court => ({ label: `${court.name} (${court.court_type === 'indoor' ? 'E mbyllur' : 'E hapur'})${court.is_active ? '' : ' - Joaktive'}`, value: court.id, disabled: !court.is_active })))
 const openingMinutes = 10 * 60
 const closingMinutes = 24 * 60

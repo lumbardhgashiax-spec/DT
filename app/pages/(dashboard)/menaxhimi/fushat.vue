@@ -213,7 +213,7 @@ async function deleteCourt() {
 
     <div
       v-if="status === 'pending'"
-      class="grid gap-5 md:grid-cols-2 xl:grid-cols-3"
+      class="grid gap-5 p-3 md:grid-cols-2 sm:p-5 xl:grid-cols-3"
     >
       <USkeleton
         v-for="item in 6"
@@ -223,7 +223,7 @@ async function deleteCourt() {
     </div>
     <div
       v-else-if="courts?.length"
-      class="grid gap-5 md:grid-cols-2 xl:grid-cols-3"
+      class="grid gap-5 p-3 md:grid-cols-2 sm:p-5 xl:grid-cols-3"
     >
       <article
         v-for="court in courts"
@@ -280,17 +280,19 @@ async function deleteCourt() {
               <UButton
                 color="neutral"
                 variant="ghost"
+                size="xs"
                 icon="i-lucide-pencil"
                 aria-label="Ndrysho fushën"
                 :disabled="!canManagePricing"
                 @click="openEdit(court)"
               />
               <UButton
-                v-if="canManagePricing"
                 color="error"
                 variant="ghost"
+                size="xs"
                 icon="i-lucide-trash-2"
                 aria-label="Fshi fushën"
+                :disabled="!canManagePricing"
                 @click="confirmCourtDelete(court)"
               />
             </div>
@@ -326,7 +328,6 @@ async function deleteCourt() {
                 loading="lazy"
               >
               <UButton
-                v-if="canManagePricing"
                 icon="i-lucide-trash-2"
                 color="error"
                 variant="solid"
@@ -334,6 +335,7 @@ async function deleteCourt() {
                 square
                 class="absolute right-1 top-1 opacity-100 shadow-sm sm:opacity-0 sm:group-hover:opacity-100"
                 aria-label="Fshi fotografinë"
+                :disabled="!canManagePricing"
                 @click="confirmImageDelete(image)"
               />
             </div>

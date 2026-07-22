@@ -1,5 +1,8 @@
 import { createError, readBody } from 'h3'
+import { serverSupabaseServiceRole } from '#supabase/server'
 import { requireDashboardAccess } from '../../utils/dashboardAccess'
+import type { Database } from '~/types/database.types'
+import { recurringSeasonsOverlap, seasonDayOrdinal } from '~/utils/seasons'
 
 const reservationStatuses = ['pending', 'confirmed', 'completed', 'cancelled'] as const
 
@@ -29,7 +32,6 @@ const actions = [
 type DashboardAction = typeof actions[number]
 type ReservationStatus = typeof reservationStatuses[number]
 type CourtType = 'indoor' | 'outdoor'
-type SeasonType = 'summer' | 'winter'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
@@ -55,6 +57,15 @@ function enumValue<T extends string>(value: unknown, allowed: readonly T[], fiel
     throw createError({ statusCode: 400, statusMessage: `${field} nuk është valid.` })
   }
   return value as T
+}
+
+function recurringDate(monthValue: unknown, dayValue: unknown, field: string) {
+  const month = Number(monthValue)
+  const day = Number(dayValue)
+  if (seasonDayOrdinal(month, day) === null) {
+    throw createError({ statusCode: 400, statusMessage: `${field} nuk është valide.` })
+  }
+  return { month, day }
 }
 
 function reservationListOptions(payload: Record<string, unknown>) {
@@ -189,6 +200,9 @@ export default defineEventHandler(async (event) => {
     }
 
     case 'reports.reservations': {
+      if (!['admin', 'superadmin'].includes(access.profile.role)) {
+        throw createError({ statusCode: 403, statusMessage: 'Vetëm admin dhe superadmin mund t’i shohin raportet.' })
+      }
       const { startAt, endAt } = reportRangeOptions(payload)
       const { data, error } = await access.client.from('reservations').select('*, customers(first_name, last_name), courts(name)').gte('start_at', startAt).lt('start_at', endAt).order('start_at')
       if (error) throw databaseError('Raporti nuk mund të ngarkohej.')
@@ -216,7 +230,7 @@ export default defineEventHandler(async (event) => {
       const [customers, courts, seasons, prices, services] = await Promise.all([
         access.client.from('customers').select('*').order('created_at', { ascending: false }).limit(200),
         access.client.from('courts').select('*').order('name'),
-        access.client.from('seasons').select('*').eq('is_active', true).order('starts_on'),
+        access.client.from('seasons').select('*').eq('is_active', true).order('starts_month').order('starts_day'),
         access.client.from('price_rules').select('*').eq('is_active', true),
         access.client.from('extra_services').select('*').eq('is_active', true).order('name')
       ])
@@ -266,8 +280,22 @@ export default defineEventHandler(async (event) => {
 
     case 'reservations.cancel': {
       const id = requiredUuid(payload.id, 'Rezervimi')
-      const { error } = await access.client.rpc('cancel_reservation', { p_reservation_id: id })
+      let serviceClient
+      try {
+        serviceClient = serverSupabaseServiceRole<Database>(event)
+      } catch {
+        throw createError({ statusCode: 500, statusMessage: 'Anulimi i rezervimit kërkon çelësin sekret të Supabase në server.' })
+      }
+
+      const { data, error } = await serviceClient
+        .from('reservations')
+        .update({ status: 'cancelled' })
+        .eq('id', id)
+        .neq('status', 'cancelled')
+        .select('id')
+        .maybeSingle()
       if (error) throw createError({ statusCode: 400, statusMessage: error.message })
+      if (!data) throw createError({ statusCode: 404, statusMessage: 'Rezervimi nuk u gjet ose është anuluar tashmë.' })
       return { action: body.action, data: true }
     }
 
@@ -287,26 +315,37 @@ export default defineEventHandler(async (event) => {
     }
 
     case 'seasons.list': {
-      const { data, error } = await access.client.from('seasons').select('*').order('starts_on', { ascending: false })
+      const { data, error } = await access.client.from('seasons').select('*').order('starts_month').order('starts_day')
       if (error) throw databaseError('Sezonet nuk mund të ngarkoheshin.')
       return { action: body.action, data: data || [] }
     }
 
     case 'seasons.save': {
       if (!['admin', 'superadmin'].includes(access.profile.role)) throw createError({ statusCode: 403, statusMessage: 'Nuk keni autorizim për këtë veprim.' })
-      const values = { name: String(payload.name || '').trim(), season_type: enumValue(payload.seasonType, ['summer', 'winter'] as const, 'Lloji i sezonit') as SeasonType, starts_on: isoDate(payload.startsOn, 'Data e fillimit').slice(0, 10), ends_on: isoDate(payload.endsOn, 'Data e përfundimit').slice(0, 10), is_active: payload.isActive !== false }
-      if (values.ends_on < values.starts_on) throw createError({ statusCode: 400, statusMessage: 'Data e perfundimit duhet te jete pas dates se fillimit.' })
+      const name = String(payload.name || '').trim().replace(/\s+/g, ' ')
+      if (!name || name.length > 80) throw createError({ statusCode: 400, statusMessage: 'Emri i sezonit kërkohet dhe mund të ketë deri në 80 karaktere.' })
+      const starts = recurringDate(payload.startsMonth, payload.startsDay, 'Data e fillimit')
+      const ends = recurringDate(payload.endsMonth, payload.endsDay, 'Data e përfundimit')
+      const values = {
+        name,
+        starts_month: starts.month,
+        starts_day: starts.day,
+        ends_month: ends.month,
+        ends_day: ends.day,
+        is_active: payload.isActive !== false
+      }
       const editingId = typeof payload.id === 'string' ? requiredUuid(payload.id, 'Sezoni') : null
-      let overlapQuery = access.client
-        .from('seasons')
-        .select('id, name')
-        .lte('starts_on', values.ends_on)
-        .gte('ends_on', values.starts_on)
-        .limit(1)
-      if (editingId) overlapQuery = overlapQuery.neq('id', editingId)
-      const { data: overlap, error: overlapError } = await overlapQuery.maybeSingle()
-      if (overlapError) throw databaseError('Sezonet nuk mund te verifikoheshin.')
-      if (overlap) throw createError({ statusCode: 409, statusMessage: `Rangu i datave mbivendoset me sezonin "${overlap.name}".` })
+      if (values.is_active) {
+        let overlapQuery = access.client
+          .from('seasons')
+          .select('id, name, starts_month, starts_day, ends_month, ends_day')
+          .eq('is_active', true)
+        if (editingId) overlapQuery = overlapQuery.neq('id', editingId)
+        const { data: existingSeasons, error: overlapError } = await overlapQuery
+        if (overlapError) throw databaseError('Sezonet nuk mund te verifikoheshin.')
+        const overlap = existingSeasons?.find(season => recurringSeasonsOverlap(values, season))
+        if (overlap) throw createError({ statusCode: 409, statusMessage: `Periudha mbivendoset me sezonin "${overlap.name}".` })
+      }
       const result = editingId
         ? await access.client.from('seasons').update(values).eq('id', editingId)
         : await access.client.from('seasons').insert(values)
@@ -326,7 +365,7 @@ export default defineEventHandler(async (event) => {
     case 'prices.list': {
       const { data, error } = await access.client
         .from('price_rules')
-        .select('*, seasons(name, season_type)')
+        .select('*, seasons(name)')
         .eq('duration_minutes', 60)
         .order('created_at', { ascending: false })
       if (error) throw databaseError('Çmimet nuk mund të ngarkoheshin.')
@@ -339,7 +378,15 @@ export default defineEventHandler(async (event) => {
       const result = typeof payload.id === 'string'
         ? await access.client.from('price_rules').update(values).eq('id', payload.id)
         : await access.client.from('price_rules').insert(values)
-      if (result.error) throw createError({ statusCode: 400, statusMessage: result.error.message })
+      if (result.error) {
+        if (result.error.code === '23505') {
+          throw createError({
+            statusCode: 409,
+            statusMessage: 'Ekziston tashmë një çmim për këtë sezon dhe lloj fushe. Përditëso çmimin ekzistues ose zgjidh një kombinim tjetër.'
+          })
+        }
+        throw createError({ statusCode: 400, statusMessage: result.error.message })
+      }
       return { action: body.action, data: true }
     }
 
