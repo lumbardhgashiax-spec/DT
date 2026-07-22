@@ -6,7 +6,7 @@ export interface ReservationView extends TableRow<'reservations'> {
 }
 
 export interface PriceRuleView extends TableRow<'price_rules'> {
-  seasons: Pick<TableRow<'seasons'>, 'name' | 'season_type'> | null
+  seasons: Pick<TableRow<'seasons'>, 'name'> | null
 }
 
 export interface DashboardProfile {

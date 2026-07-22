@@ -89,8 +89,11 @@ export class DashboardApiError extends Error {
   readonly data?: unknown
 
   constructor(action: string, cause: unknown) {
-    const source = cause as { message?: string, status?: number, statusCode?: number, data?: unknown }
+    const source = cause as { message?: string, status?: number, statusCode?: number, data?: unknown, statusMessage?: string }
+    const responseData = source?.data as { statusMessage?: string, message?: string } | undefined
+    const userMessage = responseData?.statusMessage || responseData?.message || source?.statusMessage || source?.message
     super(source?.message || 'Kërkesa për dashboard dështoi.')
+    this.message = userMessage || this.message
     this.name = 'DashboardApiError'
     this.action = action
     this.statusCode = source?.statusCode || source?.status

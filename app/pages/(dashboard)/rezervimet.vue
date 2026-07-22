@@ -31,7 +31,9 @@ const { data: reservations, status, refresh, error } = await useAsyncData('dashb
 const filteredReservations = computed(() => (reservations.value || []).filter((reservation) => {
   const customer = `${reservation.customers?.first_name || ''} ${reservation.customers?.last_name || ''} ${reservation.customers?.phone || ''}`.toLowerCase()
   const matchesSearch = !search.value || customer.includes(search.value.toLowerCase())
-  const matchesStatus = statusFilter.value === 'all' || reservation.status === statusFilter.value
+  const matchesStatus = statusFilter.value === 'all'
+    || (statusFilter.value === 'confirmed' && ['pending', 'confirmed'].includes(reservation.status))
+    || reservation.status === statusFilter.value
   const matchesDate = !dateFilter.value || reservation.start_at.slice(0, 10) === dateFilter.value
   return matchesSearch && matchesStatus && matchesDate
 }))
@@ -41,15 +43,15 @@ watch([search, statusFilter, dateFilter], () => {
 })
 
 const statusMeta: Record<string, { label: string, color: 'warning' | 'success' | 'neutral' | 'error' }> = {
-  pending: { label: 'Ne pritje', color: 'warning' },
-  confirmed: { label: 'Konfirmuar', color: 'success' },
+  pending: { label: 'Rezervim i ri', color: 'warning' },
+  confirmed: { label: 'Rezervim i ri', color: 'success' },
   completed: { label: 'Perfunduar', color: 'neutral' },
   cancelled: { label: 'Anuluar', color: 'error' }
 }
 
 const UBadge = resolveComponent('UBadge')
 const UButton = resolveComponent('UButton')
-const UTooltip = resolveComponent('UTooltip')
+const UIcon = resolveComponent('UIcon')
 
 function openCreate() {
   selectedReservation.value = null
@@ -106,8 +108,22 @@ async function confirmReservationAction() {
 
 const columns: TableColumn<ReservationView>[] = [
   {
+    id: 'booking_source',
+    header: '',
+    meta: { class: { th: 'w-10 px-0', td: 'w-10 px-0 text-center' } },
+    cell: ({ row }) => h('span', { class: 'inline-flex size-5 items-center justify-center' }, row.original.created_by === null
+      ? [h(UIcon, {
+          'name': 'i-lucide-user-round',
+          'class': 'size-4 text-muted',
+          'title': 'Rezervim online nga klienti',
+          'aria-label': 'Rezervim online nga klienti'
+        })]
+      : [])
+  },
+  {
     id: 'customer',
     header: 'Klienti',
+    meta: { class: { td: 'pl-4' } },
     cell: ({ row }) => h('div', { class: 'min-w-0' }, [
       h('p', { class: 'font-medium text-highlighted truncate' }, `${row.original.customers?.first_name || ''} ${row.original.customers?.last_name || ''}`.trim() || 'Pa emer'),
       h('p', { class: 'text-xs text-muted truncate' }, row.original.customers?.phone || 'Pa telefon')
@@ -148,33 +164,39 @@ const columns: TableColumn<ReservationView>[] = [
   },
   {
     id: 'actions',
-    header: '',
-    meta: { class: { th: 'w-32', td: 'text-right' } },
+    header: 'Veprimet',
+    meta: { class: { th: 'w-40 text-right', td: 'text-right' } },
     cell: ({ row }) => h('div', { class: 'flex justify-end gap-1' }, [
-      h(UTooltip, { text: 'Ndrysho' }, () => h(UButton, {
+      h(UButton, {
         'color': 'neutral',
         'variant': 'ghost',
+        'size': 'xs',
         'icon': 'i-lucide-pencil',
+        'title': 'Ndrysho',
         'aria-label': 'Ndrysho rezervimin',
         'onClick': () => openEdit(row.original)
-      })),
+      }),
       row.original.status !== 'cancelled'
-        ? h(UTooltip, { text: 'Anulo' }, () => h(UButton, {
+        ? h(UButton, {
             'color': 'error',
             'variant': 'ghost',
+            'size': 'xs',
             'icon': 'i-lucide-calendar-x',
+            'title': 'Anulo',
             'aria-label': 'Anulo rezervimin',
             'onClick': () => askReservationAction('cancel', row.original)
-          }))
+          })
         : null,
       canManagePricing.value
-        ? h(UTooltip, { text: 'Fshi' }, () => h(UButton, {
+        ? h(UButton, {
             'color': 'error',
             'variant': 'ghost',
+            'size': 'xs',
             'icon': 'i-lucide-trash-2',
+            'title': 'Fshi',
             'aria-label': 'Fshi rezervimin',
             'onClick': () => askReservationAction('delete', row.original)
-          }))
+          })
         : null
     ])
   }
@@ -221,10 +243,8 @@ onMounted(() => {
       >
         <option value="all">
           Te gjitha statuset
-        </option><option value="pending">
-          Ne pritje
         </option><option value="confirmed">
-          Konfirmuar
+          Rezervim i ri
         </option><option value="completed">
           Perfunduar
         </option><option value="cancelled">
@@ -248,7 +268,7 @@ onMounted(() => {
       class="mb-5"
     />
 
-    <section class="overflow-hidden rounded-2xl border border-default bg-white shadow-xs dark:bg-slate-900">
+    <section class="overflow-hidden rounded-2xl border border-default bg-white p-3 shadow-xs sm:p-5 dark:bg-slate-900">
       <UTable
         v-model:pagination="pagination"
         :data="filteredReservations"

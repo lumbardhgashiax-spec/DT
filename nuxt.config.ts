@@ -5,7 +5,9 @@ export default defineNuxtConfig({
   modules: ['@nuxt/eslint', '@nuxt/ui', '@nuxtjs/supabase'],
 
   devtools: {
-    enabled: import.meta.dev
+    // DevTools are not required by the application and can emit a
+    // Node-runtime syntax error during Nuxt 4 development startup.
+    enabled: false
   },
 
   css: ['~/assets/css/main.css', '~/assets/css/public-site.css'],

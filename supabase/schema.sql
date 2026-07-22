@@ -78,18 +78,16 @@ create table public.extra_services (
 create table public.seasons (
   id uuid primary key default gen_random_uuid(),
   name text not null unique,
-  season_type text not null
-    check (season_type in ('summer', 'winter')),
-  starts_on date not null,
-  ends_on date not null,
+  starts_month smallint not null check (starts_month between 1 and 12),
+  starts_day smallint not null,
+  ends_month smallint not null check (ends_month between 1 and 12),
+  ends_day smallint not null,
   is_active boolean not null default true,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
 
-  check (ends_on >= starts_on),
-  exclude using gist (
-    daterange(starts_on, ends_on, '[]') with &&
-  )
+  check (starts_day between 1 and case when starts_month = 2 then 29 when starts_month in (4, 6, 9, 11) then 30 else 31 end),
+  check (ends_day between 1 and case when ends_month = 2 then 29 when ends_month in (4, 6, 9, 11) then 30 else 31 end)
 );
 
 -- 7. Cmimet sipas sezonit, llojit te fushes dhe nxemjes

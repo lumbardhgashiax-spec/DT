@@ -18,7 +18,8 @@
     "@nuxtjs/supabase": "2.0.9",
     "@unhead/vue": "^3.2.1",
     "nuxt": "^4.5.0",
-    "tailwindcss": "^4.3.2"
+    "tailwindcss": "^4.3.2",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@nuxt/eslint": "^1.16.0",
@@ -27,6 +28,7 @@
     "vue-tsc": "^3.3.7"
   },
   "overrides": {
-    "esbuild": "^0.28.1"
+    "esbuild": "^0.28.1",
+    "vite": "8.1.4"
   }
 }

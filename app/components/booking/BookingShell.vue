@@ -1,7 +1,20 @@
 <script setup lang="ts">
+import { z } from 'zod'
 import type { CourtId } from '~/types/booking'
 
 const booking = usePublicBooking()
+
+const customerSchema = z.object({
+  firstName: z.string().trim().min(1, 'Shkruaj emrin.'),
+  lastName: z.string().trim().min(1, 'Shkruaj mbiemrin.'),
+  phone: z.string()
+    .trim()
+    .regex(/^[+\d][\d\s-]{6,18}$/, 'Shkruaj një numër telefoni valid.')
+    .refine(value => (value.match(/\d/g)?.length ?? 0) >= 7, 'Numri duhet të ketë së paku 7 shifra.'),
+  email: z.string()
+    .trim()
+    .refine(value => !value || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value), 'Shkruaj një email valid.')
+})
 
 const customerInputUi = {
   root: 'w-full',
@@ -54,7 +67,10 @@ function formatDuration(minutes: number) {
     <div class="booking-shell__grid">
       <UForm
         class="booking-form"
+        :schema="customerSchema"
         :state="booking.customer"
+        :validate-on="['input', 'blur', 'change', 'submit']"
+        :validate-on-input-delay="250"
         @submit.prevent="booking.submitBooking"
       >
         <fieldset>
@@ -177,8 +193,11 @@ function formatDuration(minutes: number) {
               :aria-pressed="booking.extraServiceIds.value.includes(service.id)"
               @click="booking.toggleExtraService(service.id)"
             >
-              <strong>{{ service.name }}</strong>
-              <span>{{ service.description || 'Sherbim shtese' }} - {{ formatPrice(service.price) }}/ore</span>
+              <div class="booking-service-copy">
+                <strong>{{ service.name }}</strong>
+                <span>{{ service.description || 'Sherbim shtese' }}</span>
+              </div>
+              <small class="booking-service-price">{{ formatPrice(service.price) }} / ore</small>
             </button>
           </div>
         </fieldset>
@@ -472,9 +491,26 @@ legend {
   cursor: pointer;
 }
 
+.option-grid button {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.booking-service-copy {
+  min-width: 0;
+}
+
+.booking-service-copy strong,
+.booking-service-copy span {
+  display: block;
+}
+
 .option-grid button.is-active {
-  border-color: var(--ink);
-  background: var(--lime);
+  border-color: #173C32;
+  background: #EEFFB8;
 }
 
 .date-strip button.is-active,
@@ -495,6 +531,16 @@ legend {
   margin-top: 4px;
   color: var(--muted);
   font-size: 0.86rem;
+}
+
+.option-grid .booking-service-price {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  margin-top: 0;
+  color: var(--forest);
+  font-size: 0.78rem;
+  font-weight: 850;
 }
 
 .date-strip {
@@ -688,43 +734,75 @@ legend {
 
 .booking-summary__ready {
   display: grid;
-  grid-template-columns: 38px 1fr;
-  gap: 12px;
+  grid-template-columns: 34px 1fr;
+  gap: 11px;
   align-items: start;
-  border-radius: 8px;
-  padding: 18px;
-  background: var(--forest);
-  color: #FFFFFF;
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(26, 107, 85, 0.18);
+  border-radius: 9px;
+  padding: 16px;
+  background: linear-gradient(135deg, #F8FBF5 0%, #F1F7EE 100%);
+  color: var(--ink);
+}
+
+.booking-summary__ready::before {
+  position: absolute;
+  inset: 12px auto 12px 0;
+  width: 3px;
+  border-radius: 0 999px 999px 0;
+  background: #2B7A63;
+  content: '';
 }
 
 .booking-summary__ready :deep(svg) {
-  width: 38px;
-  height: 38px;
-  border-radius: 999px;
-  padding: 9px;
-  background: rgba(216, 255, 62, 0.16);
-  color: var(--lime);
+  width: 34px;
+  height: 34px;
+  border: 1px solid rgba(26, 107, 85, 0.16);
+  border-radius: 8px;
+  padding: 8px;
+  background: #FFFFFF;
+  color: #2B7A63;
+  box-shadow: 0 3px 10px rgba(18, 61, 51, 0.07);
 }
 
 .booking-summary__ready span {
   display: block;
-  color: rgba(255, 255, 255, 0.68);
+  margin-top: 3px;
+  color: #63736B;
+  font-size: 0.8rem;
   line-height: 1.45;
 }
 
 .booking-summary__ready strong {
   display: block;
-  color: var(--lime);
-  font-size: 0.98rem;
+  color: #173C32;
+  font-size: 0.93rem;
+  font-weight: 830;
   line-height: 1.2;
 }
 
 .booking-submit {
   min-height: 48px;
   border-radius: 5px;
+  border: 1px solid transparent;
   background: var(--lime);
   color: var(--ink);
   font-weight: 900;
+}
+
+.booking-submit:not(:disabled) {
+  cursor: pointer;
+}
+
+.booking-submit:focus-visible {
+  border-color: var(--ink);
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.booking-submit:disabled {
+  cursor: not-allowed;
 }
 
 @media (min-width: 700px) {

@@ -28,7 +28,6 @@ const { data: services, status, error, refresh } = await useAsyncData('extra-ser
 
 const UBadge = resolveComponent('UBadge')
 const UButton = resolveComponent('UButton')
-const UTooltip = resolveComponent('UTooltip')
 
 function openCreate() {
   editingId.value = null
@@ -106,26 +105,29 @@ const columns: TableColumn<TableRow<'extra_services'>>[] = [
   },
   {
     id: 'actions',
-    header: '',
+    header: 'Veprimet',
     meta: { class: { th: 'w-24', td: 'text-right' } },
     cell: ({ row }) => h('div', { class: 'flex justify-end gap-1' }, [
-      h(UTooltip, { text: 'Ndrysho' }, () => h(UButton, {
+      h(UButton, {
         'color': 'neutral',
         'variant': 'ghost',
+        'size': 'xs',
         'icon': 'i-lucide-pencil',
+        'title': 'Ndrysho',
         'aria-label': 'Ndrysho sherbimin',
         'disabled': !canManagePricing.value,
         'onClick': () => openEdit(row.original)
-      })),
-      canManagePricing.value
-        ? h(UTooltip, { text: 'Fshi' }, () => h(UButton, {
-            'color': 'error',
-            'variant': 'ghost',
-            'icon': 'i-lucide-trash-2',
-            'aria-label': 'Fshi sherbimin',
-            'onClick': () => askDeleteService(row.original)
-          }))
-        : null
+      }),
+      h(UButton, {
+        'color': 'error',
+        'variant': 'ghost',
+        'size': 'xs',
+        'icon': 'i-lucide-trash-2',
+        'title': 'Fshi',
+        'aria-label': 'Fshi sherbimin',
+        'disabled': !canManagePricing.value,
+        'onClick': () => askDeleteService(row.original)
+      })
     ])
   }
 ]
@@ -171,7 +173,7 @@ const columns: TableColumn<TableRow<'extra_services'>>[] = [
       :description="error.message"
     />
 
-    <section class="overflow-hidden rounded-2xl border border-default bg-white shadow-xs dark:bg-slate-900">
+    <section class="overflow-hidden rounded-2xl border border-default bg-white p-3 shadow-xs sm:p-5 dark:bg-slate-900">
       <UTable
         v-model:pagination="pagination"
         :data="services || []"

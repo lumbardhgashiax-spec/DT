@@ -365,7 +365,7 @@ export function usePublicBooking() {
 
   watch([courtId, date, time, durationMinutes, () => extraServiceIds.value.join('|')], () => {
     void refreshQuote()
-  })
+  }, { immediate: true })
 
   onMounted(() => {
     void refreshOptions()

@@ -15,7 +15,10 @@ interface DateRange {
   end: DateValue
 }
 
-definePageMeta({ layout: 'dashboard' })
+definePageMeta({
+  layout: 'dashboard',
+  middleware: 'reports-admin'
+})
 useSeoMeta({ title: 'Raportet | Diamond Tennis Academy', robots: 'noindex, nofollow' })
 
 const dashboardApi = useDashboardApi()

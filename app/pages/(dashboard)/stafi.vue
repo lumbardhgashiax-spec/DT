@@ -59,7 +59,6 @@ const staffStats = computed(() => ({
 const UAvatar = resolveComponent('UAvatar')
 const UBadge = resolveComponent('UBadge')
 const UButton = resolveComponent('UButton')
-const UTooltip = resolveComponent('UTooltip')
 
 function resetForm() {
   form.full_name = ''
@@ -167,22 +166,24 @@ const columns: TableColumn<TableRow<'profiles'>>[] = [
     header: '',
     meta: { class: { th: 'w-24', td: 'text-right' } },
     cell: ({ row }) => h('div', { class: 'flex justify-end gap-1' }, [
-      h(UTooltip, { text: 'Ndrysho' }, () => h(UButton, {
+      h(UButton, {
         'color': 'neutral',
         'variant': 'ghost',
         'icon': 'i-lucide-pencil',
+        'title': 'Ndrysho',
         'aria-label': 'Ndrysho stafin',
         'disabled': !isSuperAdmin.value,
         'onClick': () => openEdit(row.original)
-      })),
-      h(UTooltip, { text: 'Fshi' }, () => h(UButton, {
+      }),
+      h(UButton, {
         'color': 'error',
         'variant': 'ghost',
         'icon': 'i-lucide-trash-2',
+        'title': 'Fshi',
         'aria-label': 'Fshi stafin',
         'disabled': !isSuperAdmin.value || row.original.id === currentProfile.value?.id,
         'onClick': () => askDelete(row.original)
-      }))
+      })
     ])
   }
 ]

@@ -3,6 +3,7 @@ import { createError, setResponseHeader } from 'h3'
 import type { H3Event } from 'h3'
 import { serverSupabaseServiceRole } from '#supabase/server'
 import type { Database, TableRow } from '~/types/database.types'
+import { recurringSeasonContains } from '~/utils/seasons'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -55,7 +56,6 @@ interface ResolvedPublicQuote {
   courtType: TableRow<'courts'>['court_type']
   seasonId: string
   seasonName: string
-  seasonType: TableRow<'seasons'>['season_type']
   priceRuleId: string
   date: string
   time?: string
@@ -80,7 +80,6 @@ export interface PublicQuoteResponse {
   }
   season: {
     name: string
-    type: TableRow<'seasons'>['season_type']
   }
   date: string
   time?: string
@@ -468,18 +467,16 @@ export async function resolvePublicBookingQuote(
     requireActivePublicCourt(client, input.courtId),
     client
       .from('seasons')
-      .select('id, name, season_type')
+      .select('id, name, starts_month, starts_day, ends_month, ends_day')
       .eq('is_active', true)
-      .lte('starts_on', input.date)
-      .gte('ends_on', input.date)
-      .maybeSingle()
   ])
 
   if (seasonResult.error) throw databaseError()
-  if (!seasonResult.data) throw invalidInput('Nuk ka sezon aktiv për datën e zgjedhur.')
+  const [, bookingMonth, bookingDay] = input.date.split('-').map(Number)
+  const season = seasonResult.data?.find(item => recurringSeasonContains(item, bookingMonth || 0, bookingDay || 0))
+  if (!season) throw invalidInput('Nuk ka sezon aktiv për datën e zgjedhur.')
 
   const court = courtResult
-  const season = seasonResult.data
   const priceResult = await client
     .from('price_rules')
     .select('id, price')
@@ -531,7 +528,6 @@ export async function resolvePublicBookingQuote(
     courtType: court.court_type,
     seasonId: season.id,
     seasonName: season.name,
-    seasonType: season.season_type,
     priceRuleId: priceResult.data.id,
     date: input.date,
     time: input.time,
@@ -547,7 +543,7 @@ export async function resolvePublicBookingQuote(
 export function publicQuoteResponse(quote: ResolvedPublicQuote): PublicQuoteResponse {
   return {
     court: { id: quote.courtId, name: quote.courtName, courtType: quote.courtType },
-    season: { name: quote.seasonName, type: quote.seasonType },
+    season: { name: quote.seasonName },
     date: quote.date,
     ...(quote.time ? { time: quote.time } : {}),
     ...(quote.endTime ? { endTime: quote.endTime } : {}),

@@ -29,7 +29,6 @@ const { data, status, error, refresh } = await useAsyncData('price-management', 
 
 const UBadge = resolveComponent('UBadge')
 const UButton = resolveComponent('UButton')
-const UTooltip = resolveComponent('UTooltip')
 
 function openCreate() {
   editingId.value = null
@@ -53,7 +52,13 @@ async function save() {
   saving.value = true
   try {
     await dashboardApi.savePrice({ id: editingId.value || undefined, seasonId: form.seasonId, courtType: form.courtType, price: form.price, isActive: form.isActive })
-    toast.add({ title: editingId.value ? 'Cmimi u perditesua' : 'Cmimi u shtua', color: 'success' })
+    const seasonName = data.value?.seasons.find(item => item.id === form.seasonId)?.name || 'sezonin e zgjedhur'
+    const courtLabel = form.courtType === 'indoor' ? 'fushë të mbyllur' : 'fushë të hapur'
+    toast.add({
+      title: editingId.value ? 'Çmimi u përditësua' : 'Çmimi u shtua',
+      description: `Çmimi për ${seasonName} në ${courtLabel} u ${editingId.value ? 'përditësua' : 'shtua'} me sukses.`,
+      color: 'success'
+    })
     modalOpen.value = false
     await refresh()
   } catch (cause) {
@@ -107,26 +112,29 @@ const columns: TableColumn<PriceRuleView>[] = [
   },
   {
     id: 'actions',
-    header: '',
+    header: 'Veprimet',
     meta: { class: { th: 'w-24', td: 'text-right' } },
     cell: ({ row }) => h('div', { class: 'flex justify-end gap-1' }, [
-      h(UTooltip, { text: 'Ndrysho' }, () => h(UButton, {
+      h(UButton, {
         'color': 'neutral',
         'variant': 'ghost',
+        'size': 'xs',
         'icon': 'i-lucide-pencil',
+        'title': 'Ndrysho',
         'aria-label': 'Ndrysho cmimin',
         'disabled': !canManagePricing.value,
         'onClick': () => openEdit(row.original)
-      })),
-      canManagePricing.value
-        ? h(UTooltip, { text: 'Fshi' }, () => h(UButton, {
-            'color': 'error',
-            'variant': 'ghost',
-            'icon': 'i-lucide-trash-2',
-            'aria-label': 'Fshi cmimin',
-            'onClick': () => askDeletePrice(row.original)
-          }))
-        : null
+      }),
+      h(UButton, {
+        'color': 'error',
+        'variant': 'ghost',
+        'size': 'xs',
+        'icon': 'i-lucide-trash-2',
+        'title': 'Fshi',
+        'aria-label': 'Fshi cmimin',
+        'disabled': !canManagePricing.value,
+        'onClick': () => askDeletePrice(row.original)
+      })
     ])
   }
 ]
@@ -182,7 +190,7 @@ const columns: TableColumn<PriceRuleView>[] = [
       :description="error.message"
     />
 
-    <section class="overflow-hidden rounded-2xl border border-default bg-white shadow-xs dark:bg-slate-900">
+    <section class="overflow-hidden rounded-2xl border border-default bg-white p-3 shadow-xs sm:p-5 dark:bg-slate-900">
       <UTable
         v-model:pagination="pagination"
         :data="data?.prices || []"
