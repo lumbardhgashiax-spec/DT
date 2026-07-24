@@ -17,25 +17,25 @@ export default defineEventHandler(async (event) => {
     .select('id')
     .eq('id', courtId)
     .maybeSingle()
-  if (courtError) throw createError({ statusCode: 500, statusMessage: 'Fusha nuk mund të verifikohej.' })
-  if (!court) throw createError({ statusCode: 404, statusMessage: 'Fusha nuk u gjet.' })
+  if (courtError) throw createError({ statusCode: 500, message: 'Fusha nuk mund të verifikohej.' })
+  if (!court) throw createError({ statusCode: 404, message: 'Fusha nuk u gjet.' })
 
   const formData = await readMultipartFormData(event)
   if (!formData) {
-    throw createError({ statusCode: 400, statusMessage: 'Kërkesa duhet të përmbajë fotografi.' })
+    throw createError({ statusCode: 400, message: 'Kërkesa duhet të përmbajë fotografi.' })
   }
 
   const unexpectedFile = formData.find(part => part.filename && part.name !== 'images')
   if (unexpectedFile) {
-    throw createError({ statusCode: 400, statusMessage: 'Fusha e skedarit nuk është valide.' })
+    throw createError({ statusCode: 400, message: 'Fusha e skedarit nuk është valide.' })
   }
 
   const files = formData.filter(part => part.name === 'images' && part.filename)
   if (!files.length) {
-    throw createError({ statusCode: 400, statusMessage: 'Zgjidh të paktën një fotografi.' })
+    throw createError({ statusCode: 400, message: 'Zgjidh të paktën një fotografi.' })
   }
   if (files.length > maxCourtImagesPerRequest) {
-    throw createError({ statusCode: 400, statusMessage: `Mund të ngarkohen maksimumi ${maxCourtImagesPerRequest} fotografi në një herë.` })
+    throw createError({ statusCode: 400, message: `Mund të ngarkohen maksimumi ${maxCourtImagesPerRequest} fotografi në një herë.` })
   }
 
   const normalizedFiles = files.map(file => ({ file, ...validateCourtImage(file) }))
@@ -46,7 +46,7 @@ export default defineEventHandler(async (event) => {
     .order('sort_order', { ascending: false })
     .limit(1)
     .maybeSingle()
-  if (latestImageError) throw createError({ statusCode: 500, statusMessage: 'Renditja e fotografive nuk mund të lexohej.' })
+  if (latestImageError) throw createError({ statusCode: 500, message: 'Renditja e fotografive nuk mund të lexohej.' })
 
   const uploadedPaths: string[] = []
   try {
@@ -73,6 +73,6 @@ export default defineEventHandler(async (event) => {
     return { uploaded: rows.length }
   } catch {
     if (uploadedPaths.length) await client.storage.from(courtImageBucket).remove(uploadedPaths)
-    throw createError({ statusCode: 500, statusMessage: 'Fotografitë nuk mund të ruheshin.' })
+    throw createError({ statusCode: 500, message: 'Fotografitë nuk mund të ruheshin.' })
   }
 })

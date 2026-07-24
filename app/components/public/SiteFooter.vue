@@ -85,6 +85,22 @@ const emailHref = computed(() => publicEmail ? `mailto:${publicEmail}` : '')
           <UIcon name="i-lucide-arrow-up-right" aria-hidden="true" />
         </a>
       </div>
+
+      <nav aria-label="Politikat ligjore">
+        <span>Ligjore</span>
+        <NuxtLink to="/terms">
+          Kushtet
+        </NuxtLink>
+        <NuxtLink to="/privacy-policy">
+          Privatësia
+        </NuxtLink>
+        <NuxtLink to="/cookie-policy">
+          Cookies
+        </NuxtLink>
+        <NuxtLink to="/refund-policy">
+          Anulime & refund
+        </NuxtLink>
+      </nav>
     </div>
 
     <div class="site-footer__bottom">
@@ -102,7 +118,7 @@ const emailHref = computed(() => publicEmail ? `mailto:${publicEmail}` : '')
 
 .site-footer__main {
   display: grid;
-  grid-template-columns: minmax(220px, 1.25fr) minmax(130px, 0.55fr) minmax(170px, 0.75fr) minmax(160px, 0.75fr);
+  grid-template-columns: minmax(220px, 1.25fr) minmax(130px, 0.55fr) minmax(170px, 0.75fr) minmax(160px, 0.75fr) minmax(130px, 0.55fr);
   gap: clamp(32px, 5vw, 78px);
 }
 

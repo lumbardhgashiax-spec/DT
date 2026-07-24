@@ -8,6 +8,11 @@ import {
   setPublicResponseHeaders
 } from '../../../utils/publicBooking'
 import { listPublicCourts, listPublicExtraServices } from '../../../utils/publicCourts'
+import { isPayseraDatabaseReady } from '../../../utils/publicCheckout'
+import {
+  isPayseraCheckoutConfigured,
+  isPayseraProviderReady
+} from '../../../utils/paysera'
 import { enforcePublicRateLimit } from '../../../utils/publicRateLimit'
 
 function hourLabel(hour: number) {
@@ -19,10 +24,15 @@ export default defineEventHandler(async (event) => {
   enforcePublicRateLimit(event, 'courts')
 
   const client = await requirePublicBookingService(event)
-  const [courts, extraServices] = await Promise.all([
+  const [courts, extraServices, payseraDatabaseReady] = await Promise.all([
     listPublicCourts(client, false),
-    listPublicExtraServices(client)
+    listPublicExtraServices(client),
+    isPayseraDatabaseReady(client)
   ])
+  const payseraConfigured = isPayseraCheckoutConfigured(event)
+  const payseraProviderReady = payseraConfigured
+    && payseraDatabaseReady
+    && await isPayseraProviderReady(event)
 
   return {
     timezone: ACADEMY_TIME_ZONE,
@@ -32,6 +42,10 @@ export default defineEventHandler(async (event) => {
     },
     slotMinutes: PUBLIC_SLOT_MINUTES,
     durationMinutes: PUBLIC_DURATION_MINUTES,
+    payment: {
+      provider: 'paysera' as const,
+      available: payseraProviderReady
+    },
     courts: courts.map(court => ({
       id: court.id,
       name: court.name,

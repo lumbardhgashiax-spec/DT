@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { brandConfig } from '~/config/brand'
+import CookieConsent from '~/components/public/CookieConsent.vue'
 import DiamondAssistantWidget from '~/components/assistant/DiamondAssistantWidget.vue'
 import SiteFooter from '~/components/public/SiteFooter.vue'
 import SiteHeader from '~/components/public/SiteHeader.vue'
@@ -75,6 +76,7 @@ useSeoMeta({
       </UMain>
 
       <DiamondAssistantWidget />
+      <CookieConsent />
       <SiteFooter />
     </div>
 

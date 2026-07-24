@@ -41,7 +41,7 @@ function toPublicCourt(
 }
 
 function publicCourtError(message = 'Fushat nuk mund të ngarkoheshin tani.') {
-  return createError({ statusCode: 500, statusMessage: message })
+  return createError({ statusCode: 500, message: message })
 }
 
 async function signedUrlsByPath(client: PublicServiceClient, paths: string[]) {
@@ -146,14 +146,14 @@ export async function listPublicExtraServices(client: PublicServiceClient) {
 
   if (error) {
     if (error.code === '42501') {
-      throw createError({ statusCode: 503, statusMessage: 'Shërbimet shtesë nuk kanë ende qasje publike.' })
+      throw createError({ statusCode: 503, message: 'Shërbimet shtesë nuk kanë ende qasje publike.' })
     }
 
     if (error.code === '42P01' || error.code === 'PGRST205') {
-      throw createError({ statusCode: 503, statusMessage: 'Tabela e shërbimeve shtesë nuk është e gatshme për rezervime publike.' })
+      throw createError({ statusCode: 503, message: 'Tabela e shërbimeve shtesë nuk është e gatshme për rezervime publike.' })
     }
 
-    throw createError({ statusCode: 500, statusMessage: 'Shërbimet shtesë nuk mund të ngarkoheshin tani.' })
+    throw createError({ statusCode: 500, message: 'Shërbimet shtesë nuk mund të ngarkoheshin tani.' })
   }
 
   return (data || []).map(service => ({

@@ -1,9 +1,10 @@
 export default defineEventHandler((event) => {
   const config = useRuntimeConfig(event)
+  const available = Boolean(config.assistantBaseUrl && config.assistantModel)
 
   return {
-    available: Boolean(config.openRouterApiKey),
-    provider: config.openRouterApiKey ? 'openrouter' : 'unavailable',
-    model: config.openRouterApiKey ? config.openRouterModel : null
+    available,
+    provider: available ? config.assistantProvider : 'unavailable',
+    model: available ? config.assistantModel : null
   }
 })

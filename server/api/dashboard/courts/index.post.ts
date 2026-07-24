@@ -8,7 +8,7 @@ export default defineEventHandler(async (event) => {
   const { data, error } = await client.from('courts').insert(values).select().single()
 
   if (error) {
-    throw createError({ statusCode: 400, statusMessage: error.code === '23505' ? 'Ekziston tashmë një fushë me këtë emër.' : 'Fusha nuk mund të ruhej.' })
+    throw createError({ statusCode: 400, message: error.code === '23505' ? 'Ekziston tashmë një fushë me këtë emër.' : 'Fusha nuk mund të ruhej.' })
   }
 
   return data

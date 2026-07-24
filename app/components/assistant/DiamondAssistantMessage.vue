@@ -2,9 +2,16 @@
 import type { AssistantMessage } from '~/types/assistant'
 import DiamondAssistantImageAvatar from './DiamondAssistantImageAvatar.vue'
 
-defineProps<{
+const props = defineProps<{
   message: AssistantMessage
 }>()
+
+const checkoutUrl = computed(() => props.message.content.match(
+  /https:\/\/api\.paysera\.com\/checkout-payment-link\/payment-collection\/v1\/payment-links\/[A-Za-z0-9_-]+/
+)?.[0] || '')
+const messageParts = computed(() => checkoutUrl.value
+  ? props.message.content.split(checkoutUrl.value)
+  : [props.message.content])
 </script>
 
 <template>
@@ -33,7 +40,16 @@ defineProps<{
         class="diamond-assistant-message__icon"
         aria-hidden="true"
       />
-      <p>{{ message.content }}</p>
+      <p>
+        {{ messageParts[0] }}
+        <a
+          v-if="checkoutUrl"
+          :href="checkoutUrl"
+          target="_blank"
+          rel="noopener noreferrer"
+        >Hap pagesen ne Paysera</a>
+        {{ messageParts[1] || '' }}
+      </p>
     </div>
   </article>
 </template>
@@ -119,6 +135,14 @@ defineProps<{
 
 .diamond-assistant-message__bubble p {
   margin: 0;
+  white-space: pre-wrap;
+}
+
+.diamond-assistant-message__bubble a {
+  color: #087A5B;
+  font-weight: 800;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 .diamond-assistant-message__icon {

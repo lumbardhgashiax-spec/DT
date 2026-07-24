@@ -40,18 +40,39 @@ limit. It ignores proxy-provided visitor IPs by default. Set
 `NUXT_BOOKING_TRUST_PROXY=true` only when the hosting proxy is configured to
 overwrite `X-Forwarded-For` safely.
 
-Before production, verify that the dashboard RLS migration is applied and that
-anonymous users have no direct table privileges. Because public bookings are
-confirmed immediately, deploy an edge/WAF limit and choose a bot-verification
-provider (for example, Turnstile) before opening the booking form to the
-internet.
+Before production, verify that every Supabase migration is applied and that
+anonymous users have no direct table privileges. Public bookings are held as
+`pending` while the customer pays and become `confirmed` only after a
+signature-verified Paysera webhook. Deploy an edge/WAF limit and choose a
+bot-verification provider (for example, Turnstile) before opening the booking
+form to the internet.
+
+## Paysera Checkout Modern
+
+The browser receives only the Paysera checkout URL. OAuth credentials, price
+verification, order creation, and webhook verification stay on the Nuxt
+server. There is no public fallback that confirms a reservation without
+payment. The booking reference and calendar become available only after the
+verified payment changes the reservation from `pending` to `confirmed`. The
+webhook endpoint is:
+
+```text
+https://your-site.com/api/payments/paysera/webhook
+```
+
+Paysera also receives this URL automatically as the order `callback_url`.
+Apply `supabase/migrations/202607230014_paysera_checkout_modern.sql` before
+deploying the application code.
 
 ## Diamond Assistant
 
-The public assistant calls OpenRouter only from Nuxt server routes. The browser
-never receives the OpenRouter key. If `NUXT_OPENROUTER_API_KEY` is missing, the
-assistant stays in maintenance mode and does not present placeholder answers as
-real information.
+The public assistant calls an OpenAI-compatible LLM only from Nuxt server
+routes. The browser never receives the model endpoint credentials. For Ollama,
+use the `/v1/chat/completions` compatible API by setting
+`NUXT_ASSISTANT_BASE_URL` to the Ollama host, for example
+`http://192.168.0.29:11434`. If the model endpoint is unavailable, the assistant
+stays in maintenance mode and does not present placeholder answers as real
+information.
 
 ## Setup
 
@@ -62,10 +83,14 @@ SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_KEY=your-publishable-or-anon-key
 NUXT_SUPABASE_SECRET_KEY=your-server-only-secret-key
 NUXT_PUBLIC_SITE_URL=https://your-site.com
-NUXT_OPENROUTER_API_KEY=your-openrouter-key
-NUXT_OPENROUTER_MODEL=openai/gpt-4o
-NUXT_OPENROUTER_SITE_URL=https://your-site.com
-NUXT_OPENROUTER_SITE_NAME=Diamond Tennis Academy
+NUXT_PAYSERA_CLIENT_ID=your-paysera-client-id
+NUXT_PAYSERA_CLIENT_SECRET=your-paysera-client-secret
+NUXT_ASSISTANT_PROVIDER=openai-compatible
+NUXT_ASSISTANT_BASE_URL=http://192.168.0.29:11434
+NUXT_ASSISTANT_MODEL=gemma4:12b-mlx
+NUXT_ASSISTANT_API_KEY=
+NUXT_ASSISTANT_SITE_NAME=Diamond Tennis Academy
+NUXT_ASSISTANT_DEVELOPER_NAME=Atomx Solutions SHPK
 ```
 
 For Vercel, set those variables for the Production environment and redeploy

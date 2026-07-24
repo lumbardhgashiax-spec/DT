@@ -14,12 +14,25 @@ const courtOptions = computed(() => booking.courts.value.map(court => ({
   description: court.courtType === 'indoor' ? 'Fushe e mbyllur' : 'Fushe e hapur'
 })))
 
+const bookingSteps = [
+  { label: 'Fusha', icon: 'i-lucide-map-pin' },
+  { label: 'Data', icon: 'i-lucide-calendar-days' },
+  { label: 'Ora', icon: 'i-lucide-clock-3' },
+  { label: 'Te dhenat', icon: 'i-lucide-user-round' }
+]
+
 function formatDate(value: string) {
+  if (!value) return 'Pa zgjedhur'
+
   const weekdays = ['die', 'hen', 'mar', 'mer', 'enj', 'pre', 'sht']
   const months = ['jan', 'shk', 'mar', 'pri', 'maj', 'qer', 'kor', 'gush', 'sht', 'tet', 'nen', 'dhj']
   const date = new Date(`${value}T12:00:00.000Z`)
 
-  return `${weekdays[date.getUTCDay()]}, ${String(date.getUTCDate()).padStart(2, '0')} ${months[date.getUTCMonth()]}`
+  return `${weekdays[date.getUTCDay()]}, ${String(date.getUTCDate()).padStart(2, '0')} ${months[date.getUTCMonth()]} ${date.getUTCFullYear()}`
+}
+
+function formatSuggestedDate(value: string) {
+  return formatDate(value).replace(/\s\d{4}$/, '')
 }
 
 function selectCourt(value: string) {
@@ -47,9 +60,31 @@ function formatDuration(minutes: number) {
       <p>Rezervimi</p>
       <h1>Rezervo fushen pa krijuar llogari.</h1>
       <span>
-        Zgjedh fushen, daten, oren dhe te dhenat kryesore. Konfirmimi kryhet shpejt dhe pa hapur llogari.
+        Zgjidh fushen dhe termin, ploteso te dhenat, pastaj perfundo pagesen e sigurt ne Paysera.
       </span>
     </div>
+
+    <ol
+      class="booking-progress"
+      aria-label="Hapat e rezervimit"
+    >
+      <li
+        v-for="(item, index) in bookingSteps"
+        :key="item.label"
+        :class="{
+          'is-active': booking.step.value === index + 1,
+          'is-complete': booking.step.value > index + 1
+        }"
+      >
+        <span>
+          <UIcon
+            :name="booking.step.value > index + 1 ? 'i-lucide-check' : item.icon"
+            aria-hidden="true"
+          />
+        </span>
+        <strong>{{ item.label }}</strong>
+      </li>
+    </ol>
 
     <div class="booking-shell__grid">
       <UForm
@@ -57,8 +92,8 @@ function formatDuration(minutes: number) {
         :state="booking.customer"
         @submit.prevent="booking.submitBooking"
       >
-        <fieldset>
-          <legend>Zgjidh Fushen?</legend>
+        <fieldset class="booking-step">
+          <legend>1. Zgjidh fushen</legend>
           <div
             v-if="booking.optionsLoading.value"
             class="slot-loading"
@@ -91,41 +126,63 @@ function formatDuration(minutes: number) {
           />
         </fieldset>
 
-        <fieldset>
-          <legend>Zgjidh Daten</legend>
-          <label class="booking-date-input">
-            <UIcon
-              name="i-lucide-calendar-days"
-              aria-hidden="true"
-            />
-            <span>
-              <strong>Data</strong>
-              <small>Mund te zgjedhesh cdo date nga sot e tutje.</small>
-            </span>
-            <UInput
-              :model-value="booking.date.value"
-              :min="booking.minDate.value"
-              type="date"
-              aria-label="Zgjidh daten e rezervimit"
-              @update:model-value="booking.selectDate"
-            />
-          </label>
-          <div class="date-strip">
+        <fieldset
+          v-if="booking.selectedCourt.value"
+          class="booking-step"
+        >
+          <legend>2. Zgjidh daten</legend>
+          <BookingDatePicker
+            :model-value="booking.date.value"
+            :min="booking.minDate.value"
+            @update:model-value="booking.selectDate"
+          >
+            <template #trigger="{ open }">
+              <button
+                type="button"
+                class="booking-date-trigger"
+                :aria-expanded="open"
+                aria-label="Zgjidh daten e rezervimit"
+              >
+                <UIcon
+                  name="i-lucide-calendar-days"
+                  class="booking-date-trigger__calendar"
+                  aria-hidden="true"
+                />
+                <div>
+                  <strong>Data</strong>
+                  <span>{{ formatDate(booking.date.value) }}</span>
+                </div>
+                <UIcon
+                  name="i-lucide-chevron-down"
+                  class="booking-date-trigger__chevron"
+                  aria-hidden="true"
+                />
+              </button>
+            </template>
+          </BookingDatePicker>
+          <div
+            class="date-strip"
+            aria-label="Datat e sugjeruara"
+          >
             <button
               v-for="day in booking.nextDates.value"
               :key="day"
               type="button"
               :class="{ 'is-active': booking.date.value === day }"
+              :aria-pressed="booking.date.value === day"
               @click="booking.selectDate(day)"
             >
-              <strong>{{ formatDate(day) }}</strong>
+              <strong>{{ formatSuggestedDate(day) }}</strong>
               <span>{{ day }}</span>
             </button>
           </div>
         </fieldset>
 
-        <fieldset>
-          <legend>Zgjidh Oren</legend>
+        <fieldset
+          v-if="booking.date.value"
+          class="booking-step"
+        >
+          <legend>3. Zgjidh oren</legend>
           <p class="booking-time-help">
             Zgjidh oren e pare, pastaj oret ngjitur per ta zgjatur te njejtin rezervim (deri ne 5 ore).
           </p>
@@ -156,6 +213,15 @@ function formatDuration(minutes: number) {
             </button>
           </div>
           <UAlert
+            v-if="!booking.loadingSlots.value && !booking.slots.value.length"
+            color="warning"
+            variant="soft"
+            icon="i-lucide-calendar-x-2"
+            title="Nuk ka termine te disponueshme"
+            description="Zgjidh nje date tjeter per kete fushe."
+            class="mt-3"
+          />
+          <UAlert
             v-if="booking.maximumDurationNotice.value"
             color="warning"
             variant="subtle"
@@ -166,8 +232,11 @@ function formatDuration(minutes: number) {
           />
         </fieldset>
 
-        <fieldset v-if="booking.extraServices.value.length">
-          <legend>4. Sherbime shtese</legend>
+        <fieldset
+          v-if="booking.time.value && booking.extraServices.value.length"
+          class="booking-step"
+        >
+          <legend>Sherbime shtese <span>(opsionale)</span></legend>
           <div class="option-grid option-grid--two">
             <button
               v-for="service in booking.extraServices.value"
@@ -183,13 +252,17 @@ function formatDuration(minutes: number) {
           </div>
         </fieldset>
 
-        <fieldset>
-          <legend>{{ booking.extraServices.value.length ? '5.' : '4.' }} Te dhenat</legend>
+        <fieldset
+          v-if="booking.time.value"
+          class="booking-step"
+        >
+          <legend>4. Te dhenat e klientit</legend>
           <div class="customer-grid">
             <UFormField
               label="Emri"
               name="firstName"
               required
+              :error="booking.customerErrors.value.firstName || undefined"
             >
               <UInput
                 v-model="booking.customer.firstName"
@@ -197,12 +270,16 @@ function formatDuration(minutes: number) {
                 size="md"
                 :ui="customerInputUi"
                 autocomplete="given-name"
+                minlength="2"
+                maxlength="100"
+                required
               />
             </UFormField>
             <UFormField
               label="Mbiemri"
               name="lastName"
               required
+              :error="booking.customerErrors.value.lastName || undefined"
             >
               <UInput
                 v-model="booking.customer.lastName"
@@ -210,24 +287,34 @@ function formatDuration(minutes: number) {
                 size="md"
                 :ui="customerInputUi"
                 autocomplete="family-name"
+                minlength="2"
+                maxlength="100"
+                required
               />
             </UFormField>
             <UFormField
               label="Telefoni"
               name="phone"
               required
+              :error="booking.customerErrors.value.phone || undefined"
             >
               <UInput
                 v-model="booking.customer.phone"
                 color="neutral"
                 size="md"
                 :ui="customerInputUi"
+                type="tel"
+                inputmode="tel"
                 autocomplete="tel"
+                minlength="7"
+                maxlength="19"
+                required
               />
             </UFormField>
             <UFormField
               label="Email"
               name="email"
+              :error="booking.customerErrors.value.email || undefined"
             >
               <UInput
                 v-model="booking.customer.email"
@@ -236,6 +323,7 @@ function formatDuration(minutes: number) {
                 :ui="customerInputUi"
                 type="email"
                 autocomplete="email"
+                maxlength="254"
               />
             </UFormField>
           </div>
@@ -249,15 +337,65 @@ function formatDuration(minutes: number) {
           :description="booking.error.value"
         />
 
+        <UAlert
+          v-if="booking.time.value && !booking.paymentAvailable.value"
+          color="warning"
+          variant="soft"
+          icon="i-lucide-wrench"
+          title="Pagesa online nuk eshte aktive"
+          description="Konfigurimi i sigurt i Paysera-s po perfundohet. Rezervimi do te aktivizohet sapo sherbimi i pageses te jete gati."
+        />
+
+        <div
+          v-if="booking.time.value"
+          class="payment-handoff"
+        >
+          <UIcon
+            name="i-lucide-shield-check"
+            aria-hidden="true"
+          />
+          <span>
+            Te dhenat e karteles ose bankes plotesohen vetem ne faqen e sigurt te Paysera-s.
+            Diamond Tennis Academy nuk i ruan ato.
+          </span>
+        </div>
+
+        <label
+          v-if="booking.time.value"
+          class="legal-acceptance"
+        >
+          <input
+            v-model="booking.legalAccepted.value"
+            type="checkbox"
+          >
+          <span>
+            Pajtohem me
+            <NuxtLink
+              to="/terms"
+              target="_blank"
+            >Kushtet e përdorimit</NuxtLink>,
+            <NuxtLink
+              to="/privacy-policy"
+              target="_blank"
+            >Privacy Policy</NuxtLink>
+            dhe
+            <NuxtLink
+              to="/refund-policy"
+              target="_blank"
+            >Cancellation & Refund Policy</NuxtLink>.
+          </span>
+        </label>
+
         <UButton
+          v-if="booking.time.value"
           type="submit"
           size="lg"
           color="primary"
           block
-          icon="i-lucide-check-circle"
+          icon="i-lucide-credit-card"
           :loading="booking.submitting.value"
           :disabled="!booking.canSubmit.value"
-          label="Konfirmo rezervimin"
+          label="Vazhdo te pagesa e sigurt"
           class="booking-submit"
         />
       </UForm>
@@ -268,7 +406,7 @@ function formatDuration(minutes: number) {
         <dl>
           <div>
             <dt>Data</dt>
-            <dd>{{ booking.date.value }}</dd>
+            <dd>{{ booking.date.value || 'Pa zgjedhur' }}</dd>
           </div>
           <div>
             <dt>Ora</dt>
@@ -294,8 +432,8 @@ function formatDuration(minutes: number) {
             aria-hidden="true"
           />
           <div>
-            <strong>{{ booking.canSubmit.value ? 'Gati per konfirmim' : 'Vazhdo zgjedhjen' }}</strong>
-            <span>Pas konfirmimit ruhet referenca e rezervimit.</span>
+            <strong>{{ booking.canSubmit.value ? 'Gati per pagese' : 'Vazhdo zgjedhjen' }}</strong>
+            <span>Rezervimi konfirmohet vetem pasi Paysera ta verifikoje pagesen.</span>
           </div>
         </div>
       </aside>
@@ -341,12 +479,92 @@ function formatDuration(minutes: number) {
   line-height: 1.65;
 }
 
+.booking-progress {
+  width: min(100%, 760px);
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0;
+  margin: 30px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.booking-progress li {
+  position: relative;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  color: var(--muted);
+}
+
+.booking-progress li:not(:last-child)::after {
+  position: absolute;
+  z-index: 0;
+  top: 16px;
+  right: 0;
+  left: 34px;
+  height: 1px;
+  background: var(--line);
+  content: '';
+}
+
+.booking-progress li > span {
+  position: relative;
+  z-index: 1;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: #FFFFFF;
+}
+
+.booking-progress li :deep(svg) {
+  width: 16px;
+  height: 16px;
+}
+
+.booking-progress li strong {
+  position: relative;
+  z-index: 1;
+  width: fit-content;
+  padding-right: 8px;
+  background: var(--page-bg);
+  font-size: 0.76rem;
+}
+
+.booking-progress li.is-active {
+  color: var(--forest);
+}
+
+.booking-progress li.is-active > span {
+  border-color: var(--forest);
+  background: var(--lime);
+}
+
+.booking-progress li.is-complete {
+  color: var(--forest);
+}
+
+.booking-progress li.is-complete > span {
+  border-color: var(--forest);
+  background: var(--forest);
+  color: #FFFFFF;
+}
+
+.booking-progress li.is-complete::after {
+  background: var(--forest);
+}
+
 .booking-shell__grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(280px, 390px);
   gap: 18px;
   align-items: start;
-  margin-top: 34px;
+  margin-top: 20px;
 }
 
 .booking-form,
@@ -374,6 +592,28 @@ legend {
   margin-bottom: 12px;
   color: var(--ink);
   font-weight: 850;
+}
+
+legend span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 650;
+}
+
+.booking-step {
+  animation: booking-step-in 180ms ease-out;
+}
+
+@keyframes booking-step-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .booking-time-help {
@@ -484,9 +724,9 @@ legend {
 }
 
 .option-grid strong,
-.option-grid span,
 .date-strip strong,
-.date-strip span {
+.date-strip span,
+.option-grid span {
   display: block;
 }
 
@@ -499,58 +739,93 @@ legend {
 
 .date-strip {
   display: grid;
-  grid-auto-columns: minmax(136px, 1fr);
+  grid-auto-columns: minmax(142px, 1fr);
   grid-auto-flow: column;
   gap: 10px;
   overflow-x: auto;
-  padding-bottom: 4px;
+  margin-top: 12px;
+  padding: 1px 1px 7px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(10, 23, 20, 0.25) transparent;
 }
 
-.booking-date-input {
+.date-strip button {
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.date-strip button:hover {
+  border-color: rgba(255, 112, 71, 0.72);
+  background: #FFF4F0;
+}
+
+.date-strip button.is-active {
+  border-color: var(--coral);
+  background: var(--coral);
+  color: #FFFFFF;
+}
+
+.date-strip button.is-active span {
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.booking-date-trigger {
+  width: 100%;
+  min-height: 68px;
   display: grid;
-  grid-template-columns: 42px minmax(0, 1fr) minmax(160px, 220px);
+  grid-template-columns: 42px minmax(0, 1fr) 20px;
   gap: 12px;
   align-items: center;
-  margin-bottom: 12px;
   border: 1px solid rgba(18, 61, 51, 0.22);
   border-radius: 6px;
   padding: 12px;
   background: #F7F9F5;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 160ms ease, background 160ms ease;
 }
 
-.booking-date-input :deep(svg) {
+.booking-date-trigger:hover,
+.booking-date-trigger[aria-expanded='true'] {
+  border-color: var(--forest);
+  background: #EEF5F0;
+}
+
+.booking-date-trigger :deep(.booking-date-trigger__calendar) {
   width: 42px;
   height: 42px;
   border-radius: 5px;
   padding: 10px;
-  background: rgba(216, 255, 62, 0.34);
-  color: var(--forest);
+  background: #FFE8DF;
+  color: #C2411D;
 }
 
-.booking-date-input span,
-.booking-date-input strong,
-.booking-date-input small {
+.booking-date-trigger > div {
   min-width: 0;
+}
+
+.booking-date-trigger span,
+.booking-date-trigger strong {
   display: block;
 }
 
-.booking-date-input small {
+.booking-date-trigger span {
   margin-top: 3px;
   color: var(--muted);
   font-size: 0.82rem;
-  line-height: 1.35;
 }
 
-.booking-date-input :deep(input) {
-  width: 100%;
-  min-height: 44px;
-  border: 1px solid rgba(18, 61, 51, 0.22);
-  border-radius: 5px;
-  padding: 0 11px;
-  background: #FFFFFF;
-  color: var(--ink);
-  font: inherit;
-  font-weight: 800;
+.booking-date-trigger :deep(.booking-date-trigger__chevron) {
+  width: 18px;
+  height: 18px;
+  color: var(--muted);
+  transition: transform 160ms ease;
+}
+
+.booking-date-trigger[aria-expanded='true'] :deep(.booking-date-trigger__chevron) {
+  transform: rotate(180deg);
 }
 
 .slot-grid {
@@ -607,6 +882,61 @@ legend {
 
 .booking-options-error {
   margin-top: 10px;
+}
+
+.payment-handoff {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  gap: 11px;
+  align-items: center;
+  border: 1px solid rgba(18, 61, 51, 0.16);
+  border-radius: 6px;
+  padding: 12px 14px;
+  background: #F7F9F5;
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+.payment-handoff :deep(svg) {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  padding: 8px;
+  background: rgba(216, 255, 62, 0.38);
+  color: var(--forest);
+}
+
+.legal-acceptance {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  border: 1px solid rgba(18, 61, 51, 0.16);
+  border-radius: 6px;
+  padding: 12px 14px;
+  background: #FFFFFF;
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1.5;
+  cursor: pointer;
+}
+
+.legal-acceptance input {
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  accent-color: var(--coral);
+}
+
+.legal-acceptance a {
+  color: var(--forest);
+  font-weight: 820;
+  text-decoration: none;
+}
+
+.legal-acceptance a:hover {
+  text-decoration: underline;
 }
 
 .customer-grid {
@@ -744,9 +1074,27 @@ legend {
 }
 
 @media (max-width: 760px) {
+  .booking-progress li {
+    grid-template-columns: 32px minmax(0, 1fr);
+    gap: 5px;
+  }
+
+  .booking-progress li > span {
+    width: 32px;
+    height: 32px;
+  }
+
+  .booking-progress li:not(:last-child)::after {
+    top: 15px;
+    left: 32px;
+  }
+
+  .booking-progress li strong {
+    font-size: 0.66rem;
+  }
+
   .option-grid--two,
-  .customer-grid,
-  .booking-date-input {
+  .customer-grid {
     grid-template-columns: 1fr;
   }
 }

@@ -10,7 +10,7 @@ export default defineEventHandler(async (event) => {
   ])
 
   if (courtsResult.error || imagesResult.error) {
-    throw createError({ statusCode: 500, statusMessage: 'Fushat nuk mund të ngarkoheshin.' })
+    throw createError({ statusCode: 500, message: 'Fushat nuk mund të ngarkoheshin.' })
   }
 
   const images = imagesResult.data || []
@@ -21,7 +21,7 @@ export default defineEventHandler(async (event) => {
       15 * 60
     )
     if (error) {
-      throw createError({ statusCode: 500, statusMessage: 'Fotografitë e fushave nuk mund të ngarkoheshin.' })
+      throw createError({ statusCode: 500, message: 'Fotografitë e fushave nuk mund të ngarkoheshin.' })
     }
     data?.forEach((item) => {
       if (item.path && item.signedUrl) signedByPath.set(item.path, item.signedUrl)

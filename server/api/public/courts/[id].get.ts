@@ -18,7 +18,7 @@ export default defineEventHandler(async (event) => {
   if (!court) {
     throw createError({
       statusCode: 404,
-      statusMessage: 'Fusha nuk u gjet.'
+      message: 'Fusha nuk u gjet.'
     })
   }
 

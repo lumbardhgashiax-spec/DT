@@ -1,4 +1,4 @@
-import type { DashboardProfile, PriceRuleView, ReservationView } from '~/types/dashboard'
+﻿import type { DashboardProfile, PriceRuleView, ReservationView } from '~/types/dashboard'
 import type { TableRow } from '~/types/database.types'
 
 /** The request shape accepted by POST /api/dashboard/actions. */
@@ -83,18 +83,57 @@ type RequestArguments<TAction extends KnownAction> = undefined extends ActionPay
   ? [payload?: ActionPayload<TAction>, options?: RequestOptions]
   : [payload: ActionPayload<TAction>, options?: RequestOptions]
 
+export interface DashboardApiErrorInfo {
+  name: 'DashboardApiError'
+  message: string
+  action: string
+  statusCode?: number
+  data?: unknown
+}
+
 export class DashboardApiError extends Error {
   readonly action: string
   readonly statusCode?: number
   readonly data?: unknown
 
-  constructor(action: string, cause: unknown) {
-    const source = cause as { message?: string, status?: number, statusCode?: number, data?: unknown }
-    super(source?.message || 'Kërkesa për dashboard dështoi.')
+  constructor(info: DashboardApiErrorInfo) {
+    super(info.message)
     this.name = 'DashboardApiError'
-    this.action = action
-    this.statusCode = source?.statusCode || source?.status
-    this.data = source?.data
+    this.action = info.action
+    this.statusCode = info.statusCode
+    this.data = info.data
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+function errorMessageFromData(data: unknown) {
+  if (!isRecord(data)) return null
+  if (typeof data.message === 'string' && data.message.trim()) return data.message
+  if (typeof data.statusMessage === 'string' && data.statusMessage.trim()) return data.statusMessage
+  return null
+}
+
+function createDashboardApiError(action: string, cause: unknown): DashboardApiErrorInfo {
+  const source = isRecord(cause) ? cause : {}
+  const data = source.data
+  const message = errorMessageFromData(data)
+    || (typeof source.message === 'string' && source.message.trim() ? source.message : null)
+    || 'Kërkesa për dashboard dështoi.'
+  const statusCode = typeof source.statusCode === 'number'
+    ? source.statusCode
+    : typeof source.status === 'number'
+      ? source.status
+      : undefined
+
+  return {
+    name: 'DashboardApiError',
+    message,
+    action,
+    statusCode,
+    data
   }
 }
 
@@ -105,7 +144,7 @@ export class DashboardApiError extends Error {
  */
 export function useDashboardApi() {
   const pendingByAction = useState<Record<string, number>>('dashboard-api-pending', () => ({}))
-  const errorsByAction = useState<Record<string, DashboardApiError | null>>('dashboard-api-errors', () => ({}))
+  const errorsByAction = useState<Record<string, DashboardApiErrorInfo | null>>('dashboard-api-errors', () => ({}))
   const lastAction = useState<string | null>('dashboard-api-last-action', () => null)
 
   const requestFetch = import.meta.server ? useRequestFetch() : $fetch
@@ -146,9 +185,9 @@ export function useDashboardApi() {
       })
       return response.data
     } catch (cause) {
-      const error = new DashboardApiError(action, cause)
+      const error = createDashboardApiError(action, cause)
       errorsByAction.value[action] = error
-      throw error
+      throw new DashboardApiError(error)
     } finally {
       const next = (pendingByAction.value[action] || 1) - 1
       if (next > 0) pendingByAction.value[action] = next

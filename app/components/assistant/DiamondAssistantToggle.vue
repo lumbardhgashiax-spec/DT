@@ -12,11 +12,16 @@ const emit = defineEmits<{
   dismissBubble: []
 }>()
 
+const route = useRoute()
+const isBookingPage = computed(() => route.path === '/rezervo')
 const { avatarStyle, onPointerMove, resetPointer } = useAssistantMotion()
 </script>
 
 <template>
-  <div class="diamond-assistant-toggle-wrap">
+  <div
+    v-if="!isBookingPage"
+    class="diamond-assistant-toggle-wrap"
+  >
     <Transition name="diamond-bubble">
       <div
         v-if="bubbleVisible"

@@ -59,23 +59,35 @@ export default defineEventHandler(async (event) => {
   }
 
   if (reservationError) {
-    throw createError({ statusCode: 500, statusMessage: 'Kalendari nuk mund të përgatitet tani.' })
+    throw createError({ statusCode: 500, message: 'Kalendari nuk mund të përgatitet tani.' })
   }
 
-  if (!reservation || reservation.status === 'cancelled') {
-    throw createError({ statusCode: 404, statusMessage: 'Rezervimi nuk është i disponueshëm për kalendar.' })
+  if (!reservation || !['confirmed', 'completed'].includes(reservation.status)) {
+    throw createError({ statusCode: 404, message: 'Rezervimi nuk është i disponueshëm për kalendar.' })
   }
 
-  const { data: court, error: courtError } = await client
-    .from('courts')
-    .select('name')
-    .eq('id', reservation.court_id)
-    .maybeSingle()
+  const [courtResult, paymentResult] = await Promise.all([
+    client
+      .from('courts')
+      .select('name')
+      .eq('id', reservation.court_id)
+      .maybeSingle(),
+    client
+      .from('payment_transactions')
+      .select('status')
+      .eq('reservation_id', reservation.id)
+      .maybeSingle()
+  ])
 
-  if (courtError || !court) {
-    throw createError({ statusCode: 500, statusMessage: 'Kalendari nuk mund të përgatitet tani.' })
+  if (courtResult.error || paymentResult.error) {
+    throw createError({ statusCode: 500, message: 'Kalendari nuk mund të përgatitet tani.' })
   }
 
+  if (!courtResult.data || paymentResult.data?.status !== 'paid') {
+    throw createError({ statusCode: 404, message: 'Rezervimi nuk është i disponueshëm për kalendar.' })
+  }
+
+  const court = courtResult.data
   const displayReference = reservation.booking_reference || reservation.id
   const calendarFile = [
     'BEGIN:VCALENDAR',

@@ -93,25 +93,6 @@ export interface PublicQuoteResponse {
   currency: 'EUR'
 }
 
-export interface PublicBookingConfirmation {
-  reference: string
-  bookingReference: string
-  courtName: string
-  date: string
-  time: string
-  endTime: string
-  durationMinutes: number
-  totalPrice: number
-  currency: 'EUR'
-  status: 'pending' | 'confirmed' | 'completed' | 'cancelled'
-  createdAt: string
-}
-
-type PublicReservationInsert = Database['public']['Tables']['reservations']['Insert']
-type InsertedPublicReservation = Pick<TableRow<'reservations'>, 'id' | 'created_at'> & {
-  booking_reference?: string | null
-}
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 }
@@ -141,28 +122,12 @@ export function isMissingBookingReferenceColumn(error: unknown) {
   )
 }
 
-function isBookingReferenceCollision(error: unknown) {
-  if (!isRecord(error)) return false
-
-  const code = typeof error.code === 'string' ? error.code : ''
-  const message = [
-    error.message,
-    error.details,
-    error.hint
-  ]
-    .filter((item): item is string => typeof item === 'string')
-    .join(' ')
-    .toLowerCase()
-
-  return code === '23505' && message.includes('booking_reference')
-}
-
 function databaseError(message = 'Shërbimi i rezervimeve nuk është i disponueshëm tani.') {
-  return createError({ statusCode: 500, statusMessage: message })
+  return createError({ statusCode: 500, message: message })
 }
 
 function invalidInput(message: string) {
-  return createError({ statusCode: 422, statusMessage: message })
+  return createError({ statusCode: 422, message: message })
 }
 
 function academyDateParts(value: Date) {
@@ -254,7 +219,38 @@ function normalizePrice(value: unknown) {
   return Math.round(price * 100) / 100
 }
 
-function publicBookingReference() {
+function inferPublicSeasonType(date: string): TableRow<'seasons'>['season_type'] {
+  const month = Number(date.slice(5, 7))
+  return month >= 4 && month <= 10 ? 'summer' : 'winter'
+}
+
+function dateMonthDayKey(date: string) {
+  return Number(`${date.slice(5, 7)}${date.slice(8, 10)}`)
+}
+
+function numberMonthDayKey(month: unknown, day: unknown) {
+  const monthNumber = Number(month)
+  const dayNumber = Number(day)
+  if (!Number.isInteger(monthNumber) || !Number.isInteger(dayNumber)) return null
+  return (monthNumber * 100) + dayNumber
+}
+
+function seasonMatchesPublicDate(season: Record<string, unknown>, date: string) {
+  if (typeof season.starts_on === 'string' && typeof season.ends_on === 'string') {
+    return season.starts_on <= date && season.ends_on >= date
+  }
+
+  const startsKey = numberMonthDayKey(season.starts_month, season.starts_day)
+  const endsKey = numberMonthDayKey(season.ends_month, season.ends_day)
+  if (startsKey === null || endsKey === null) return false
+
+  const dateKey = dateMonthDayKey(date)
+  return startsKey <= endsKey
+    ? dateKey >= startsKey && dateKey <= endsKey
+    : dateKey >= startsKey || dateKey <= endsKey
+}
+
+export function publicBookingReference() {
   const now = academyDateParts(new Date())
   const datePart = [
     now.year.toString().slice(-2),
@@ -297,7 +293,7 @@ export async function requirePublicBookingService(event: H3Event): Promise<Publi
     console.error('[public-booking] Missing Supabase environment variable:', environment)
     throw createError({
       statusCode: 503,
-      statusMessage: 'Shërbimi i rezervimeve nuk është i disponueshëm tani.'
+      message: 'Shërbimi i rezervimeve nuk është i disponueshëm tani.'
     })
   }
 
@@ -309,7 +305,7 @@ export async function requirePublicBookingService(event: H3Event): Promise<Publi
     console.error('[public-booking] Supabase service role client is unavailable:', error instanceof Error ? error.message : error)
     throw createError({
       statusCode: 503,
-      statusMessage: 'Shërbimi i rezervimeve nuk është i disponueshëm tani.'
+      message: 'Shërbimi i rezervimeve nuk është i disponueshëm tani.'
     })
   }
 }
@@ -455,7 +451,10 @@ export async function requireActivePublicCourt(client: PublicServiceClient, cour
     .eq('is_active', true)
     .maybeSingle()
 
-  if (error) throw databaseError()
+  if (error) {
+    logPublicBookingDatabaseError('active court lookup', error)
+    throw databaseError()
+  }
   if (!data) throw invalidInput('Fusha e zgjedhur nuk ekziston ose nuk është aktive.')
   return data
 }
@@ -468,18 +467,18 @@ export async function resolvePublicBookingQuote(
     requireActivePublicCourt(client, input.courtId),
     client
       .from('seasons')
-      .select('id, name, season_type')
+      .select('*')
       .eq('is_active', true)
-      .lte('starts_on', input.date)
-      .gte('ends_on', input.date)
-      .maybeSingle()
   ])
 
-  if (seasonResult.error) throw databaseError()
-  if (!seasonResult.data) throw invalidInput('Nuk ka sezon aktiv për datën e zgjedhur.')
+  if (seasonResult.error) {
+    logPublicBookingDatabaseError('season lookup', seasonResult.error)
+    throw databaseError()
+  }
+  const season = seasonResult.data?.find(item => seasonMatchesPublicDate(item, input.date))
+  if (!season) throw invalidInput('Nuk ka sezon aktiv për datën e zgjedhur.')
 
   const court = courtResult
-  const season = seasonResult.data
   const priceResult = await client
     .from('price_rules')
     .select('id, price')
@@ -490,7 +489,10 @@ export async function resolvePublicBookingQuote(
     .eq('is_active', true)
     .maybeSingle()
 
-  if (priceResult.error) throw databaseError()
+  if (priceResult.error) {
+    logPublicBookingDatabaseError('price lookup', priceResult.error)
+    throw databaseError()
+  }
   if (!priceResult.data) throw invalidInput('Nuk ka çmim aktiv për këtë fushë dhe sezon.')
 
   let services: Array<Pick<TableRow<'extra_services'>, 'id' | 'name' | 'description' | 'price'>> = []
@@ -501,7 +503,10 @@ export async function resolvePublicBookingQuote(
       .in('id', input.extraServiceIds)
       .eq('is_active', true)
 
-    if (error) throw databaseError()
+    if (error) {
+      logPublicBookingDatabaseError('extra services lookup', error)
+      throw databaseError()
+    }
     if (!data || data.length !== input.extraServiceIds.length) {
       throw invalidInput('Një nga shërbimet e zgjedhura nuk ekziston ose nuk është aktiv.')
     }
@@ -531,7 +536,7 @@ export async function resolvePublicBookingQuote(
     courtType: court.court_type,
     seasonId: season.id,
     seasonName: season.name,
-    seasonType: season.season_type,
+    seasonType: inferPublicSeasonType(input.date),
     priceRuleId: priceResult.data.id,
     date: input.date,
     time: input.time,
@@ -557,116 +562,5 @@ export function publicQuoteResponse(quote: ResolvedPublicQuote): PublicQuoteResp
     extrasHourlyPrice: quote.extrasHourlyPrice,
     totalPrice: quote.totalPrice,
     currency: 'EUR'
-  }
-}
-
-export async function createPublicBooking(
-  client: PublicServiceClient,
-  input: PublicCreateBookingInput
-): Promise<PublicBookingConfirmation> {
-  const quote = await resolvePublicBookingQuote(client, input)
-  const startAt = academyDateTimeToIso(input.date, input.time)
-  const endAt = academyDateTimeToIso(input.date, publicEndTime(input.time, input.durationMinutes))
-
-  const { data: customer, error: customerError } = await client
-    .from('customers')
-    .insert({
-      first_name: input.customer.firstName,
-      last_name: input.customer.lastName,
-      phone: input.customer.phone,
-      email: input.customer.email,
-      created_by: null
-    })
-    .select('id')
-    .single()
-
-  if (customerError || !customer) {
-    logPublicBookingDatabaseError('customer insert', customerError)
-    throw databaseError('Të dhënat e klientit nuk mund të ruheshin.')
-  }
-
-  try {
-    const reservationPayload: PublicReservationInsert = {
-      customer_id: customer.id,
-      court_id: quote.courtId,
-      season_id: quote.seasonId,
-      price_rule_id: quote.priceRuleId,
-      start_at: startAt,
-      end_at: endAt,
-      with_heating: false,
-      status: 'confirmed',
-      price: quote.totalPrice,
-      notes: null,
-      created_by: null
-    }
-
-    let reservation: InsertedPublicReservation | null = null
-    let reservationError: unknown = null
-
-    for (let attempt = 0; attempt < 3 && !reservation; attempt += 1) {
-      const result = await client
-        .from('reservations')
-        .insert({
-          ...reservationPayload,
-          booking_reference: publicBookingReference()
-        })
-        .select('id, booking_reference, created_at')
-        .single()
-
-      if (result.data) {
-        reservation = result.data
-        break
-      }
-
-      reservationError = result.error
-      if (!isBookingReferenceCollision(result.error)) break
-    }
-
-    if (!reservation && isMissingBookingReferenceColumn(reservationError)) {
-      const fallbackResult = await client
-        .from('reservations')
-        .insert(reservationPayload)
-        .select('id, created_at')
-        .single()
-
-      if (fallbackResult.data) {
-        reservation = {
-          ...fallbackResult.data,
-          booking_reference: fallbackResult.data.id
-        }
-      } else {
-        reservationError = fallbackResult.error
-      }
-    }
-
-    if (!reservation) {
-      logPublicBookingDatabaseError('reservation insert', reservationError)
-      if (isRecord(reservationError) && reservationError.code === '23P01') {
-        throw createError({
-          statusCode: 409,
-          statusMessage: 'Ky termin sapo u rezervua. Zgjidh një orë tjetër.'
-        })
-      }
-      throw databaseError('Rezervimi nuk mund të ruhej.')
-    }
-
-    return {
-      reference: reservation.id,
-      bookingReference: reservation.booking_reference || reservation.id,
-      courtName: quote.courtName,
-      date: input.date,
-      time: input.time,
-      endTime: publicEndTime(input.time, input.durationMinutes),
-      durationMinutes: input.durationMinutes,
-      totalPrice: quote.totalPrice,
-      currency: 'EUR',
-      status: 'confirmed',
-      createdAt: reservation.created_at
-    }
-  } catch (error) {
-    // The row belongs only to this request. A reservation that was actually
-    // written holds a restrictive foreign key, so this cleanup cannot erase it.
-    await client.from('customers').delete().eq('id', customer.id)
-    throw error
   }
 }

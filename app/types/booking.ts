@@ -29,6 +29,10 @@ export interface PublicBookingOptions {
   openingHours: BookingOpeningHours
   slotMinutes: number
   durationMinutes: number
+  payment: {
+    provider: 'paysera'
+    available: boolean
+  }
   courts: BookingCourt[]
   extraServices: BookingExtraService[]
 }
@@ -79,12 +83,16 @@ export interface BookingCustomer {
 
 export interface CreateBookingRequest extends BookingQuoteRequest {
   time: string
+  checkoutRequestId: string
+  legalAccepted: boolean
   customer: BookingCustomer
 }
 
+export type BookingPaymentStatus = 'initializing' | 'pending' | 'paid' | 'failed' | 'cancelled' | 'expired' | 'refunded' | 'chargeback' | 'review'
+
 export interface BookingConfirmation {
   reference: string
-  bookingReference: string
+  bookingReference?: string
   courtName: string
   date: string
   time: string
@@ -93,7 +101,16 @@ export interface BookingConfirmation {
   totalPrice: number
   currency: BookingCurrency
   status: 'pending' | 'confirmed' | 'completed' | 'cancelled'
+  paymentStatus?: BookingPaymentStatus
+  paidAt?: string | null
+  expiresAt?: string | null
   createdAt: string
+}
+
+export interface BookingCheckout {
+  paymentStatus: 'pending'
+  checkoutUrl: string
+  expiresAt: string
 }
 
 export interface BookingDraft {

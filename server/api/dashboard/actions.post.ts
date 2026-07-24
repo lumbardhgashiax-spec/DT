@@ -1,4 +1,5 @@
-import { createError, readBody } from 'h3'
+﻿import { createError, readBody } from 'h3'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { requireDashboardAccess } from '../../utils/dashboardAccess'
 
 const reservationStatuses = ['pending', 'confirmed', 'completed', 'cancelled'] as const
@@ -30,6 +31,14 @@ type DashboardAction = typeof actions[number]
 type ReservationStatus = typeof reservationStatuses[number]
 type CourtType = 'indoor' | 'outdoor'
 type SeasonType = 'summer' | 'winter'
+type NormalizedSeason = Record<string, unknown> & {
+  id: string
+  name: string
+  season_type: SeasonType
+  starts_on: string
+  ends_on: string
+  is_active: boolean
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
@@ -39,20 +48,29 @@ function isAction(value: unknown): value is DashboardAction {
   return typeof value === 'string' && (actions as readonly string[]).includes(value)
 }
 
-function databaseError(message = 'Të dhënat nuk mund të ngarkoheshin.') {
-  return createError({ statusCode: 500, statusMessage: message })
+function databaseError(message = 'Të dhënat nuk mund të ngarkoheshin.', error?: unknown) {
+  if (isRecord(error)) {
+    console.error('[dashboard-actions] database error:', {
+      code: typeof error.code === 'string' ? error.code : undefined,
+      message: typeof error.message === 'string' ? error.message : undefined,
+      details: typeof error.details === 'string' ? error.details : undefined,
+      hint: typeof error.hint === 'string' ? error.hint : undefined
+    })
+  }
+
+  return createError({ statusCode: 500, message: message })
 }
 
 function isoDate(value: unknown, field: string) {
   if (typeof value !== 'string' || !value.trim() || Number.isNaN(new Date(value).getTime())) {
-    throw createError({ statusCode: 400, statusMessage: `${field} nuk është valide.` })
+    throw createError({ statusCode: 400, message: `${field} nuk Ã«shtÃ« valide.` })
   }
   return value
 }
 
 function enumValue<T extends string>(value: unknown, allowed: readonly T[], field: string): T {
   if (typeof value !== 'string' || !allowed.includes(value as T)) {
-    throw createError({ statusCode: 400, statusMessage: `${field} nuk është valid.` })
+    throw createError({ statusCode: 400, message: `${field} nuk Ã«shtÃ« valid.` })
   }
   return value as T
 }
@@ -60,38 +78,38 @@ function enumValue<T extends string>(value: unknown, allowed: readonly T[], fiel
 function reservationListOptions(payload: Record<string, unknown>) {
   const limit = payload.limit === undefined ? 300 : Number(payload.limit)
   if (!Number.isInteger(limit) || limit < 1 || limit > 500) {
-    throw createError({ statusCode: 400, statusMessage: 'Kufiri i rezervimeve duhet të jetë nga 1 deri në 500.' })
+    throw createError({ statusCode: 400, message: 'Kufiri i rezervimeve duhet tÃ« jetÃ« nga 1 deri nÃ« 500.' })
   }
 
   const order = payload.order === 'asc' ? 'asc' : payload.order === undefined || payload.order === 'desc' ? 'desc' : null
-  if (!order) throw createError({ statusCode: 400, statusMessage: 'Renditja nuk është valide.' })
+  if (!order) throw createError({ statusCode: 400, message: 'Renditja nuk Ã«shtÃ« valide.' })
 
   const hasStart = payload.startAt !== undefined
   const hasEnd = payload.endAt !== undefined
   if (hasStart !== hasEnd) {
-    throw createError({ statusCode: 400, statusMessage: 'Data e fillimit dhe e përfundimit kërkohen bashkë.' })
+    throw createError({ statusCode: 400, message: 'Data e fillimit dhe e pÃ«rfundimit kÃ«rkohen bashkÃ«.' })
   }
 
   const startAt = hasStart ? isoDate(payload.startAt, 'Data e fillimit') : undefined
-  const endAt = hasEnd ? isoDate(payload.endAt, 'Data e përfundimit') : undefined
+  const endAt = hasEnd ? isoDate(payload.endAt, 'Data e pÃ«rfundimit') : undefined
   if (startAt && endAt) {
     const duration = new Date(endAt).getTime() - new Date(startAt).getTime()
     if (duration <= 0 || duration > 366 * 24 * 60 * 60 * 1000) {
-      throw createError({ statusCode: 400, statusMessage: 'Intervali i datave duhet të jetë deri në 366 ditë.' })
+      throw createError({ statusCode: 400, message: 'Intervali i datave duhet tÃ« jetÃ« deri nÃ« 366 ditÃ«.' })
     }
   }
 
   let statuses: ReservationStatus[] | undefined
   if (payload.statuses !== undefined) {
     if (!Array.isArray(payload.statuses) || payload.statuses.some(status => typeof status !== 'string' || !(reservationStatuses as readonly string[]).includes(status))) {
-      throw createError({ statusCode: 400, statusMessage: 'Statusi i rezervimit nuk është valid.' })
+      throw createError({ statusCode: 400, message: 'Statusi i rezervimit nuk Ã«shtÃ« valid.' })
     }
     statuses = [...new Set(payload.statuses)] as ReservationStatus[]
   }
 
   const courtId = payload.courtId === undefined ? undefined : String(payload.courtId || '')
   if (courtId !== undefined && !isUuid(courtId)) {
-    throw createError({ statusCode: 400, statusMessage: 'Fusha nuk është valide.' })
+    throw createError({ statusCode: 400, message: 'Fusha nuk Ã«shtÃ« valide.' })
   }
 
   return { limit, order, startAt, endAt, courtId, statuses }
@@ -103,25 +121,93 @@ function isUuid(value: string) {
 
 function requiredUuid(value: unknown, label: string) {
   if (typeof value !== 'string' || !isUuid(value)) {
-    throw createError({ statusCode: 400, statusMessage: `${label} nuk eshte valid.` })
+    throw createError({ statusCode: 400, message: `${label} nuk eshte valid.` })
   }
   return value
 }
 
 function foreignKeyDeleteError(error: { code?: string } | null, label: string) {
   if (error?.code === '23503') {
-    return createError({ statusCode: 409, statusMessage: `${label} nuk mund te fshihet sepse perdoret nga rezervime ose te dhena te tjera.` })
+    return createError({ statusCode: 409, message: `${label} nuk mund te fshihet sepse perdoret nga rezervime ose te dhena te tjera.` })
   }
-  return createError({ statusCode: 400, statusMessage: `${label} nuk mund te fshihet.` })
+  return createError({ statusCode: 400, message: `${label} nuk mund te fshihet.` })
+}
+
+function dateMonthDayKey(date: string) {
+  return Number(`${date.slice(5, 7)}${date.slice(8, 10)}`)
+}
+
+function inferSeasonType(startsOn: string, endsOn: string): SeasonType {
+  const startMonth = Number(startsOn.slice(5, 7))
+  const endMonth = Number(endsOn.slice(5, 7))
+  return startMonth >= 4 && endMonth <= 10 ? 'summer' : 'winter'
+}
+
+function normalizeSeason(row: Record<string, unknown>): NormalizedSeason {
+  const currentYear = new Date().getFullYear()
+  const startsOn = typeof row.starts_on === 'string'
+    ? row.starts_on
+    : `${currentYear}-${String(row.starts_month || 1).padStart(2, '0')}-${String(row.starts_day || 1).padStart(2, '0')}`
+  const endsOn = typeof row.ends_on === 'string'
+    ? row.ends_on
+    : `${currentYear}-${String(row.ends_month || 12).padStart(2, '0')}-${String(row.ends_day || 31).padStart(2, '0')}`
+  const seasonType = typeof row.season_type === 'string'
+    ? row.season_type
+    : inferSeasonType(startsOn, endsOn)
+
+  return {
+    ...row,
+    id: String(row.id || ''),
+    name: String(row.name || ''),
+    season_type: seasonType as SeasonType,
+    starts_on: startsOn,
+    ends_on: endsOn,
+    is_active: row.is_active !== false
+  }
+}
+
+function seasonRangeOverlaps(firstStart: string, firstEnd: string, secondStart: string, secondEnd: string) {
+  const firstStartKey = dateMonthDayKey(firstStart)
+  const firstEndKey = dateMonthDayKey(firstEnd)
+  const secondStartKey = dateMonthDayKey(secondStart)
+  const secondEndKey = dateMonthDayKey(secondEnd)
+
+  const expands = (start: number, end: number): Array<[number, number]> => start <= end
+    ? [[start, end]]
+    : [[start, 1231], [101, end]]
+
+  return expands(firstStartKey, firstEndKey).some(first => expands(secondStartKey, secondEndKey).some(second => (
+    first[0] <= second[1] && second[0] <= first[1]
+  )))
+}
+
+function oldSeasonValues(values: { name: string, starts_on: string, ends_on: string, is_active: boolean }) {
+  return {
+    name: values.name,
+    starts_month: Number(values.starts_on.slice(5, 7)),
+    starts_day: Number(values.starts_on.slice(8, 10)),
+    ends_month: Number(values.ends_on.slice(5, 7)),
+    ends_day: Number(values.ends_on.slice(8, 10)),
+    is_active: values.is_active
+  }
+}
+
+async function listNormalizedSeasons(client: SupabaseClient) {
+  const { data, error } = await client.from('seasons').select('*')
+  if (error) throw databaseError('Sezonet nuk mund të ngarkoheshin.', error)
+
+  return (data || [])
+    .map(item => normalizeSeason(item as Record<string, unknown>))
+    .sort((first, second) => String(second.starts_on).localeCompare(String(first.starts_on)))
 }
 
 function reportRangeOptions(payload: Record<string, unknown>) {
   const startAt = isoDate(payload.startAt, 'Data e fillimit')
-  const endAt = isoDate(payload.endAt, 'Data e përfundimit')
+  const endAt = isoDate(payload.endAt, 'Data e pÃ«rfundimit')
   const duration = new Date(endAt).getTime() - new Date(startAt).getTime()
 
   if (duration <= 0 || duration > 366 * 24 * 60 * 60 * 1000) {
-    throw createError({ statusCode: 400, statusMessage: 'Intervali i datave duhet të jetë deri në 366 ditë.' })
+    throw createError({ statusCode: 400, message: 'Intervali i datave duhet tÃ« jetÃ« deri nÃ« 366 ditÃ«.' })
   }
 
   return { startAt, endAt }
@@ -158,7 +244,7 @@ function academyMidnight(year: number, month: number, day: number) {
 export default defineEventHandler(async (event) => {
   const body = await readBody<unknown>(event)
   if (!isRecord(body) || !isAction(body.action)) {
-    throw createError({ statusCode: 400, statusMessage: 'Veprimi i API-së nuk është valid.' })
+    throw createError({ statusCode: 400, message: 'Veprimi i API-sÃ« nuk Ã«shtÃ« valid.' })
   }
 
   const payload = isRecord(body.payload) ? body.payload : {}
@@ -184,14 +270,14 @@ export default defineEventHandler(async (event) => {
         access.client.from('courts').select('*', { count: 'exact', head: true }).eq('is_active', true),
         access.client.from('reservations').select('*, customers(first_name, last_name, phone, email), courts(name, court_type)').gte('start_at', now.toISOString()).neq('status', 'cancelled').order('start_at').limit(5)
       ])
-      if (today.error || month.error || monthRows.error || previousRows.error || courts.error || upcoming.error) throw databaseError('Përmbledhja nuk mund të ngarkohej.')
+      if (today.error || month.error || monthRows.error || previousRows.error || courts.error || upcoming.error) throw databaseError('PÃ«rmbledhja nuk mund tÃ« ngarkohej.')
       return { action: body.action, data: { today: today.count || 0, month: month.count || 0, revenue: (monthRows.data || []).reduce((sum, row) => sum + Number(row.price), 0), previousRevenue: (previousRows.data || []).reduce((sum, row) => sum + Number(row.price), 0), courts: courts.count || 0, monthRows: monthRows.data || [], upcoming: upcoming.data || [] } }
     }
 
     case 'reports.reservations': {
       const { startAt, endAt } = reportRangeOptions(payload)
       const { data, error } = await access.client.from('reservations').select('*, customers(first_name, last_name), courts(name)').gte('start_at', startAt).lt('start_at', endAt).order('start_at')
-      if (error) throw databaseError('Raporti nuk mund të ngarkohej.')
+      if (error) throw databaseError('Raporti nuk mund tÃ« ngarkohej.')
       return { action: body.action, data: data || [] }
     }
 
@@ -216,17 +302,17 @@ export default defineEventHandler(async (event) => {
       const [customers, courts, seasons, prices, services] = await Promise.all([
         access.client.from('customers').select('*').order('created_at', { ascending: false }).limit(200),
         access.client.from('courts').select('*').order('name'),
-        access.client.from('seasons').select('*').eq('is_active', true).order('starts_on'),
+        listNormalizedSeasons(access.serviceClient),
         access.client.from('price_rules').select('*').eq('is_active', true),
         access.client.from('extra_services').select('*').eq('is_active', true).order('name')
       ])
-      if (customers.error || courts.error || seasons.error || prices.error || services.error) throw databaseError('Opsionet e rezervimit nuk mund të ngarkoheshin.')
+      if (customers.error || courts.error || prices.error || services.error) throw databaseError('Opsionet e rezervimit nuk mund tÃ« ngarkoheshin.')
       return {
         action: body.action,
         data: {
           customers: customers.data || [],
           courts: courts.data || [],
-          seasons: seasons.data || [],
+          seasons: seasons.filter(season => season.is_active !== false),
           priceRules: prices.data || [],
           extraServices: services.data || []
         }
@@ -236,11 +322,11 @@ export default defineEventHandler(async (event) => {
     case 'reservations.availability': {
       const courtId = String(payload.courtId || '')
       const startAt = isoDate(payload.startAt, 'Data e fillimit')
-      const endAt = isoDate(payload.endAt, 'Data e përfundimit')
+      const endAt = isoDate(payload.endAt, 'Data e pÃ«rfundimit')
       let query = access.client.from('reservations').select('id').eq('court_id', courtId).neq('status', 'cancelled').lt('start_at', endAt).gt('end_at', startAt).limit(1)
       if (typeof payload.excludeId === 'string') query = query.neq('id', payload.excludeId)
       const { data, error } = await query
-      if (error) throw databaseError('Disponueshmëria nuk mund të kontrollohej.')
+      if (error) throw databaseError('DisponueshmÃ«ria nuk mund tÃ« kontrollohej.')
       return { action: body.action, data: { available: !data?.length } }
     }
 
@@ -260,129 +346,145 @@ export default defineEventHandler(async (event) => {
         p_notes: typeof payload.notes === 'string' ? payload.notes.trim() || null : null,
         p_extra_service_ids: Array.isArray(payload.extraServiceIds) ? payload.extraServiceIds.filter((id): id is string => typeof id === 'string') : []
       })
-      if (error) throw createError({ statusCode: 400, statusMessage: error.message })
+      if (error) throw createError({ statusCode: 400, message: error.message })
       return { action: body.action, data: true }
     }
 
     case 'reservations.cancel': {
       const id = requiredUuid(payload.id, 'Rezervimi')
       const { error } = await access.client.rpc('cancel_reservation', { p_reservation_id: id })
-      if (error) throw createError({ statusCode: 400, statusMessage: error.message })
+      if (error) throw createError({ statusCode: 400, message: error.message })
       return { action: body.action, data: true }
     }
 
     case 'reservations.delete': {
-      if (!['admin', 'superadmin'].includes(access.profile.role)) throw createError({ statusCode: 403, statusMessage: 'Vetem admin dhe superadmin mund te fshijne rezervime.' })
+      if (!['admin', 'superadmin'].includes(access.profile.role)) throw createError({ statusCode: 403, message: 'Vetem admin dhe superadmin mund te fshijne rezervime.' })
       const id = requiredUuid(payload.id, 'Rezervimi')
       const { error, count } = await access.client.from('reservations').delete({ count: 'exact' }).eq('id', id)
       if (error) throw foreignKeyDeleteError(error, 'Rezervimi')
-      if (!count) throw createError({ statusCode: 404, statusMessage: 'Rezervimi nuk u gjet.' })
+      if (!count) throw createError({ statusCode: 404, message: 'Rezervimi nuk u gjet.' })
       return { action: body.action, data: true }
     }
 
     case 'courts.list': {
       const { data, error } = await access.client.from('courts').select('*').order('name')
-      if (error) throw databaseError('Fushat nuk mund të ngarkoheshin.')
+      if (error) throw databaseError('Fushat nuk mund tÃ« ngarkoheshin.')
       return { action: body.action, data: data || [] }
     }
 
     case 'seasons.list': {
-      const { data, error } = await access.client.from('seasons').select('*').order('starts_on', { ascending: false })
-      if (error) throw databaseError('Sezonet nuk mund të ngarkoheshin.')
-      return { action: body.action, data: data || [] }
+      const seasons = await listNormalizedSeasons(access.serviceClient)
+      return { action: body.action, data: seasons }
     }
 
     case 'seasons.save': {
-      if (!['admin', 'superadmin'].includes(access.profile.role)) throw createError({ statusCode: 403, statusMessage: 'Nuk keni autorizim për këtë veprim.' })
-      const values = { name: String(payload.name || '').trim(), season_type: enumValue(payload.seasonType, ['summer', 'winter'] as const, 'Lloji i sezonit') as SeasonType, starts_on: isoDate(payload.startsOn, 'Data e fillimit').slice(0, 10), ends_on: isoDate(payload.endsOn, 'Data e përfundimit').slice(0, 10), is_active: payload.isActive !== false }
-      if (values.ends_on < values.starts_on) throw createError({ statusCode: 400, statusMessage: 'Data e perfundimit duhet te jete pas dates se fillimit.' })
+      if (!['admin', 'superadmin'].includes(access.profile.role)) throw createError({ statusCode: 403, message: 'Nuk keni autorizim pÃ«r kÃ«tÃ« veprim.' })
+      const values = { name: String(payload.name || '').trim(), season_type: enumValue(payload.seasonType, ['summer', 'winter'] as const, 'Lloji i sezonit') as SeasonType, starts_on: isoDate(payload.startsOn, 'Data e fillimit').slice(0, 10), ends_on: isoDate(payload.endsOn, 'Data e pÃ«rfundimit').slice(0, 10), is_active: payload.isActive !== false }
       const editingId = typeof payload.id === 'string' ? requiredUuid(payload.id, 'Sezoni') : null
-      let overlapQuery = access.client
-        .from('seasons')
-        .select('id, name')
-        .lte('starts_on', values.ends_on)
-        .gte('ends_on', values.starts_on)
-        .limit(1)
-      if (editingId) overlapQuery = overlapQuery.neq('id', editingId)
-      const { data: overlap, error: overlapError } = await overlapQuery.maybeSingle()
-      if (overlapError) throw databaseError('Sezonet nuk mund te verifikoheshin.')
-      if (overlap) throw createError({ statusCode: 409, statusMessage: `Rangu i datave mbivendoset me sezonin "${overlap.name}".` })
+
+      const existingSeasons = await listNormalizedSeasons(access.serviceClient)
+      const overlap = existingSeasons.find(season => (
+        season.id !== editingId
+        && season.is_active !== false
+        && values.is_active
+        && seasonRangeOverlaps(String(season.starts_on), String(season.ends_on), values.starts_on, values.ends_on)
+      ))
+      if (overlap) throw createError({ statusCode: 409, message: `Rangu i datave mbivendoset me sezonin "${overlap.name}".` })
+
       const result = editingId
         ? await access.client.from('seasons').update(values).eq('id', editingId)
         : await access.client.from('seasons').insert(values)
-      if (result.error) throw createError({ statusCode: 400, statusMessage: result.error.message })
+      if (result.error && isRecord(result.error) && result.error.code === '42703') {
+        const legacyValues = oldSeasonValues(values)
+        const legacySeasons = access.client.from('seasons') as unknown as {
+          update: (payload: Record<string, unknown>) => { eq: (column: string, value: string) => Promise<{ error: { message: string } | null }> }
+          insert: (payload: Record<string, unknown>) => Promise<{ error: { message: string } | null }>
+        }
+        const legacyResult = editingId
+          ? await legacySeasons.update(legacyValues).eq('id', editingId)
+          : await legacySeasons.insert(legacyValues)
+        if (legacyResult.error) throw createError({ statusCode: 400, message: legacyResult.error.message })
+      } else if (result.error) throw createError({ statusCode: 400, message: result.error.message })
       return { action: body.action, data: true }
     }
 
     case 'seasons.delete': {
-      if (!['admin', 'superadmin'].includes(access.profile.role)) throw createError({ statusCode: 403, statusMessage: 'Nuk keni autorizim per kete veprim.' })
+      if (!['admin', 'superadmin'].includes(access.profile.role)) throw createError({ statusCode: 403, message: 'Nuk keni autorizim per kete veprim.' })
       const id = requiredUuid(payload.id, 'Sezoni')
       const { error, count } = await access.client.from('seasons').delete({ count: 'exact' }).eq('id', id)
       if (error) throw foreignKeyDeleteError(error, 'Sezoni')
-      if (!count) throw createError({ statusCode: 404, statusMessage: 'Sezoni nuk u gjet.' })
+      if (!count) throw createError({ statusCode: 404, message: 'Sezoni nuk u gjet.' })
       return { action: body.action, data: true }
     }
 
     case 'prices.list': {
-      const { data, error } = await access.client
-        .from('price_rules')
-        .select('*, seasons(name, season_type)')
-        .eq('duration_minutes', 60)
-        .order('created_at', { ascending: false })
-      if (error) throw databaseError('Çmimet nuk mund të ngarkoheshin.')
-      return { action: body.action, data: data || [] }
+      const [prices, seasons] = await Promise.all([
+        access.client
+          .from('price_rules')
+          .select('*')
+          .eq('duration_minutes', 60)
+          .order('created_at', { ascending: false }),
+        listNormalizedSeasons(access.serviceClient)
+      ])
+      if (prices.error) throw databaseError('Ã‡mimet nuk mund tÃ« ngarkoheshin.', prices.error)
+      const seasonsById = new Map(seasons.map(season => [season.id, season]))
+      const data = (prices.data || []).map(price => ({
+        ...price,
+        seasons: seasonsById.get(price.season_id) || null
+      }))
+      return { action: body.action, data }
     }
 
     case 'prices.save': {
-      if (!['admin', 'superadmin'].includes(access.profile.role)) throw createError({ statusCode: 403, statusMessage: 'Nuk keni autorizim për këtë veprim.' })
-      const values = { season_id: String(payload.seasonId || ''), court_type: enumValue(payload.courtType, ['indoor', 'outdoor'] as const, 'Lloji i fushës') as CourtType, with_heating: false, duration_minutes: 60, price: Number(payload.price), is_active: payload.isActive !== false }
+      if (!['admin', 'superadmin'].includes(access.profile.role)) throw createError({ statusCode: 403, message: 'Nuk keni autorizim pÃ«r kÃ«tÃ« veprim.' })
+      const values = { season_id: String(payload.seasonId || ''), court_type: enumValue(payload.courtType, ['indoor', 'outdoor'] as const, 'Lloji i fushÃ«s') as CourtType, with_heating: false, duration_minutes: 60, price: Number(payload.price), is_active: payload.isActive !== false }
       const result = typeof payload.id === 'string'
         ? await access.client.from('price_rules').update(values).eq('id', payload.id)
         : await access.client.from('price_rules').insert(values)
-      if (result.error) throw createError({ statusCode: 400, statusMessage: result.error.message })
+      if (result.error) throw createError({ statusCode: 400, message: result.error.message })
       return { action: body.action, data: true }
     }
 
     case 'prices.delete': {
-      if (!['admin', 'superadmin'].includes(access.profile.role)) throw createError({ statusCode: 403, statusMessage: 'Nuk keni autorizim per kete veprim.' })
+      if (!['admin', 'superadmin'].includes(access.profile.role)) throw createError({ statusCode: 403, message: 'Nuk keni autorizim per kete veprim.' })
       const id = requiredUuid(payload.id, 'Cmimi')
       const { error, count } = await access.client.from('price_rules').delete({ count: 'exact' }).eq('id', id)
       if (error) throw foreignKeyDeleteError(error, 'Cmimi')
-      if (!count) throw createError({ statusCode: 404, statusMessage: 'Cmimi nuk u gjet.' })
+      if (!count) throw createError({ statusCode: 404, message: 'Cmimi nuk u gjet.' })
       return { action: body.action, data: true }
     }
 
     case 'extra-services.list': {
       const { data, error } = await access.client.from('extra_services').select('*').order('name')
-      if (error) throw databaseError('Shërbimet shtesë nuk mund të ngarkoheshin.')
+      if (error) throw databaseError('ShÃ«rbimet shtesÃ« nuk mund tÃ« ngarkoheshin.')
       return { action: body.action, data: data || [] }
     }
 
     case 'extra-services.save': {
-      if (!['admin', 'superadmin'].includes(access.profile.role)) throw createError({ statusCode: 403, statusMessage: 'Nuk keni autorizim për këtë veprim.' })
+      if (!['admin', 'superadmin'].includes(access.profile.role)) throw createError({ statusCode: 403, message: 'Nuk keni autorizim pÃ«r kÃ«tÃ« veprim.' })
       const values = { name: String(payload.name || '').trim(), description: typeof payload.description === 'string' ? payload.description.trim() || null : null, price: Number(payload.price), is_active: payload.isActive !== false }
       const result = typeof payload.id === 'string'
         ? await access.client.from('extra_services').update(values).eq('id', payload.id)
         : await access.client.from('extra_services').insert(values)
-      if (result.error) throw createError({ statusCode: 400, statusMessage: result.error.message })
+      if (result.error) throw createError({ statusCode: 400, message: result.error.message })
       return { action: body.action, data: true }
     }
 
     case 'extra-services.delete': {
-      if (!['admin', 'superadmin'].includes(access.profile.role)) throw createError({ statusCode: 403, statusMessage: 'Nuk keni autorizim per kete veprim.' })
+      if (!['admin', 'superadmin'].includes(access.profile.role)) throw createError({ statusCode: 403, message: 'Nuk keni autorizim per kete veprim.' })
       const id = requiredUuid(payload.id, 'Sherbimi')
       const { error, count } = await access.client.from('extra_services').delete({ count: 'exact' }).eq('id', id)
       if (error) throw foreignKeyDeleteError(error, 'Sherbimi')
-      if (!count) throw createError({ statusCode: 404, statusMessage: 'Sherbimi nuk u gjet.' })
+      if (!count) throw createError({ statusCode: 404, message: 'Sherbimi nuk u gjet.' })
       return { action: body.action, data: true }
     }
 
     case 'staff.list': {
       if (access.profile.role !== 'superadmin') {
-        throw createError({ statusCode: 403, statusMessage: 'Vetëm superadmin mund ta shohë stafin.' })
+        throw createError({ statusCode: 403, message: 'VetÃ«m superadmin mund ta shohÃ« stafin.' })
       }
       const { data, error } = await access.client.from('profiles').select('*').order('created_at')
-      if (error) throw databaseError('Stafi nuk mund të ngarkohej.')
+      if (error) throw databaseError('Stafi nuk mund tÃ« ngarkohej.')
       return { action: body.action, data: data || [] }
     }
   }

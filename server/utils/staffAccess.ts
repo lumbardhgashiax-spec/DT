@@ -6,7 +6,7 @@ import type { Database } from '~/types/database.types'
 export async function requireSuperAdmin(event: H3Event) {
   const user = await serverSupabaseUser(event)
   if (!user?.sub) {
-    throw createError({ statusCode: 401, statusMessage: 'Duhet të jeni të kyçur.' })
+    throw createError({ statusCode: 401, message: 'Duhet të jeni të kyçur.' })
   }
 
   let serviceClient
@@ -15,7 +15,7 @@ export async function requireSuperAdmin(event: H3Event) {
   } catch {
     throw createError({
       statusCode: 503,
-      statusMessage: 'Menaxhimi i stafit kërkon NUXT_SUPABASE_SECRET_KEY në server.'
+      message: 'Menaxhimi i stafit kërkon NUXT_SUPABASE_SECRET_KEY në server.'
     })
   }
 
@@ -26,7 +26,7 @@ export async function requireSuperAdmin(event: H3Event) {
     .maybeSingle()
 
   if (error || !profile?.is_active || profile.role !== 'superadmin') {
-    throw createError({ statusCode: 403, statusMessage: 'Vetëm superadmin mund ta menaxhojë stafin.' })
+    throw createError({ statusCode: 403, message: 'Vetëm superadmin mund ta menaxhojë stafin.' })
   }
 
   return { serviceClient, userId: user.sub }
@@ -34,13 +34,13 @@ export async function requireSuperAdmin(event: H3Event) {
 
 export function normalizeStaffRole(value: unknown) {
   if (value === 'staff' || value === 'admin' || value === 'superadmin') return value
-  throw createError({ statusCode: 400, statusMessage: 'Roli i zgjedhur nuk është valid.' })
+  throw createError({ statusCode: 400, message: 'Roli i zgjedhur nuk është valid.' })
 }
 
 export function normalizeEmail(value: unknown) {
   const email = String(value || '').trim().toLowerCase()
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    throw createError({ statusCode: 400, statusMessage: 'Email-i nuk është valid.' })
+    throw createError({ statusCode: 400, message: 'Email-i nuk është valid.' })
   }
   return email
 }
@@ -48,7 +48,7 @@ export function normalizeEmail(value: unknown) {
 export function normalizeFullName(value: unknown) {
   const fullName = String(value || '').trim().replace(/\s+/g, ' ')
   if (fullName.length < 2 || fullName.length > 120) {
-    throw createError({ statusCode: 400, statusMessage: 'Emri i plotë duhet të ketë 2–120 karaktere.' })
+    throw createError({ statusCode: 400, message: 'Emri i plotë duhet të ketë 2–120 karaktere.' })
   }
   return fullName
 }
@@ -57,7 +57,7 @@ export function normalizePassword(value: unknown, required = false) {
   const password = String(value || '')
   if (!password && !required) return undefined
   if (password.length < 8 || password.length > 72) {
-    throw createError({ statusCode: 400, statusMessage: 'Fjalëkalimi duhet të ketë 8–72 karaktere.' })
+    throw createError({ statusCode: 400, message: 'Fjalëkalimi duhet të ketë 8–72 karaktere.' })
   }
   return password
 }

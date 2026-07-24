@@ -10,7 +10,7 @@ const courtApi = usePublicCourtsApi()
 const { data: courts, pending, error, refresh } = await useAsyncData(
   'public-court-showcase',
   () => courtApi.list(),
-  { default: () => [], server: false }
+  { default: () => [] }
 )
 
 function courtImage(court: PublicCourt) {

@@ -1,4 +1,4 @@
-import type { BookingConfirmation, BookingQuote, BookingQuoteRequest, BookingSlot, CreateBookingRequest, PublicBookingOptions } from '~/types/booking'
+import type { BookingCheckout, BookingConfirmation, BookingQuote, BookingQuoteRequest, BookingSlot, CreateBookingRequest, PublicBookingOptions } from '~/types/booking'
 
 interface AvailabilityResponse {
   courtId: string
@@ -29,7 +29,7 @@ export function usePublicBookingApi() {
       method: 'POST',
       body: payload
     }),
-    createBooking: (payload: CreateBookingRequest) => requestFetch<BookingConfirmation>('/api/public/bookings', {
+    createBooking: (payload: CreateBookingRequest) => requestFetch<BookingCheckout>('/api/public/bookings', {
       method: 'POST',
       body: payload
     }),

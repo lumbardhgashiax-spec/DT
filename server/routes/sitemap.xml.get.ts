@@ -4,7 +4,11 @@ const publicRoutes = [
   '/fushat',
   '/meso-tenis',
   '/rreth-nesh',
-  '/kontakt'
+  '/kontakt',
+  '/terms',
+  '/privacy-policy',
+  '/cookie-policy',
+  '/refund-policy'
 ]
 
 const xmlEntities: Record<string, string> = {

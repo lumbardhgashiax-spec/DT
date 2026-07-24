@@ -11,6 +11,7 @@ import {
   setPublicResponseHeaders
 } from '../../utils/publicBooking'
 import { enforcePublicRateLimit } from '../../utils/publicRateLimit'
+import { releaseExpiredPayseraHolds } from '../../utils/publicCheckout'
 
 export default defineEventHandler(async (event) => {
   setPublicResponseHeaders(event)
@@ -21,6 +22,7 @@ export default defineEventHandler(async (event) => {
   const date = parsePublicDate(query.date)
   const client = await requirePublicBookingService(event)
 
+  await releaseExpiredPayseraHolds(client)
   await requireActivePublicCourt(client, courtId)
 
   const { startAt, endAt } = publicDayRange(date)
@@ -35,7 +37,7 @@ export default defineEventHandler(async (event) => {
   if (error) {
     throw createError({
       statusCode: 500,
-      statusMessage: 'Terminet nuk mund t\u00eb ngarkoheshin tani.'
+      message: 'Terminet nuk mund t\u00eb ngarkoheshin tani.'
     })
   }
 

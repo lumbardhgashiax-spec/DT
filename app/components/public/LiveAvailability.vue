@@ -17,8 +17,8 @@ function formatDisplayDate(date: string) {
 }
 
 function formatDateCard(date: string) {
-  const weekdays = ['Die', 'Hen', 'Mar', 'Mer', 'Enj', 'Pre', 'Sht']
-  const months = ['Jan', 'Shk', 'Mar', 'Pri', 'Maj', 'Qer', 'Kor', 'Gus', 'Sht', 'Tet', 'Nen', 'Dhj']
+  const weekdays = ['Die', 'Hën', 'Mar', 'Mër', 'Enj', 'Pre', 'Sht']
+  const months = ['Jan', 'Shk', 'Mar', 'Pri', 'Maj', 'Qer', 'Kor', 'Gus', 'Sht', 'Tet', 'Nën', 'Dhj']
   const parsed = new Date(`${date}T12:00:00.000Z`)
   return {
     day: String(parsed.getUTCDate()).padStart(2, '0'),
@@ -65,9 +65,11 @@ const endTime = computed(() => selectedTime.value
   ? minutesToTime(timeToMinutes(selectedTime.value) + durationMinutes.value)
   : '')
 const displayDate = computed(() => formatDisplayDate(selectedDate.value))
-const dateCards = computed(() => minDate.value
-  ? Array.from({ length: 7 }, (_, index) => formatDateCard(addDays(minDate.value, index)))
-  : [])
+const dateCards = computed(() => (
+  minDate.value
+    ? Array.from({ length: 7 }, (_, index) => formatDateCard(addDays(minDate.value, index)))
+    : []
+))
 
 function courtTypeLabel(courtType: 'indoor' | 'outdoor') {
   return courtType === 'indoor' ? 'Fushe e mbyllur' : 'Fushe e hapur'
@@ -243,20 +245,44 @@ onMounted(() => {
               Zgjidh daten
             </h3>
           </div>
-          <label class="home-date-input">
-            <UIcon name="i-lucide-calendar-days" aria-hidden="true" />
-            <span>
-              <strong>Zgjidh daten</strong>
-              <small>Mund te zgjedhesh cdo date nga sot e tutje.</small>
-            </span>
-            <UInput v-model="selectedDate" type="date" :min="minDate" aria-label="Zgjidh daten e rezervimit" />
-          </label>
-          <div class="home-date-strip">
+          <BookingDatePicker
+            v-model="selectedDate"
+            :min="minDate"
+          >
+            <template #trigger="{ open }">
+              <button
+                type="button"
+                class="home-date-input"
+                :aria-expanded="open"
+                aria-label="Zgjidh daten e rezervimit"
+              >
+                <UIcon
+                  name="i-lucide-calendar-days"
+                  class="home-date-input__calendar"
+                  aria-hidden="true"
+                />
+                <span>
+                  <strong>Zgjidh daten</strong>
+                  <small>{{ displayDate || 'Pa zgjedhur' }}</small>
+                </span>
+                <UIcon
+                  name="i-lucide-chevron-down"
+                  class="home-date-input__chevron"
+                  aria-hidden="true"
+                />
+              </button>
+            </template>
+          </BookingDatePicker>
+          <div
+            class="home-date-strip"
+            aria-label="Datat e sugjeruara"
+          >
             <button
               v-for="day in dateCards"
               :key="day.value"
               type="button"
               :class="{ 'is-active': selectedDate === day.value }"
+              :aria-pressed="selectedDate === day.value"
               @click="selectDate(day.value)"
             >
               <strong>{{ day.weekday }}, {{ day.day }} {{ day.month }}</strong>
@@ -538,23 +564,39 @@ onMounted(() => {
 }
 
 .home-date-input {
+  width: 100%;
+  min-height: 68px;
   display: grid;
-  grid-template-columns: 42px minmax(0, 1fr) minmax(160px, 220px);
+  grid-template-columns: 42px minmax(0, 1fr) 20px;
   gap: 12px;
   align-items: center;
   border: 1px solid rgba(18, 61, 51, 0.22);
   border-radius: 6px;
   padding: 12px;
   background: #F7F9F5;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 160ms ease, background 160ms ease;
 }
 
-.home-date-input :deep(svg) {
+.home-date-input:hover,
+.home-date-input[aria-expanded='true'] {
+  border-color: var(--forest);
+  background: #EEF5F0;
+}
+
+.home-date-input :deep(.home-date-input__calendar) {
   width: 42px;
   height: 42px;
   border-radius: 5px;
   padding: 10px;
-  background: rgba(216, 255, 62, 0.34);
-  color: var(--forest);
+  background: #FFE8DF;
+  color: #C2411D;
+}
+
+.home-date-input > span {
+  min-width: 0;
 }
 
 .home-date-input strong,
@@ -568,29 +610,31 @@ onMounted(() => {
   font-size: 0.82rem;
 }
 
-.home-date-input :deep(input) {
-  width: 100%;
-  min-height: 44px;
-  border: 1px solid rgba(18, 61, 51, 0.22);
-  border-radius: 5px;
-  padding: 0 11px;
-  background: #FFFFFF;
-  color: var(--ink);
-  font: inherit;
-  font-weight: 800;
+.home-date-input :deep(.home-date-input__chevron) {
+  width: 18px;
+  height: 18px;
+  color: var(--muted);
+  transition: transform 160ms ease;
+}
+
+.home-date-input[aria-expanded='true'] :deep(.home-date-input__chevron) {
+  transform: rotate(180deg);
 }
 
 .home-date-strip {
   display: grid;
-  grid-auto-columns: minmax(136px, 1fr);
+  grid-auto-columns: minmax(142px, 1fr);
   grid-auto-flow: column;
   gap: 10px;
   overflow-x: auto;
-  padding-bottom: 4px;
+  margin-top: 12px;
+  padding: 1px 1px 7px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(10, 23, 20, 0.25) transparent;
 }
 
 .home-date-strip button {
-  min-height: 54px;
+  min-height: 58px;
   border: 1px solid var(--line);
   border-radius: 6px;
   padding: 12px;
@@ -598,11 +642,18 @@ onMounted(() => {
   color: var(--ink);
   text-align: left;
   cursor: pointer;
+  transition: border-color 160ms ease, background 160ms ease, color 160ms ease;
+}
+
+.home-date-strip button:hover {
+  border-color: rgba(255, 112, 71, 0.72);
+  background: #FFF4F0;
 }
 
 .home-date-strip button.is-active {
-  border-color: #173C32;
-  background: #EEFFB8;
+  border-color: var(--coral);
+  background: var(--coral);
+  color: #FFFFFF;
 }
 
 .home-date-strip strong,
@@ -614,6 +665,10 @@ onMounted(() => {
   margin-top: 4px;
   color: var(--muted);
   font-size: 0.76rem;
+}
+
+.home-date-strip button.is-active span {
+  color: rgba(255, 255, 255, 0.82);
 }
 
 .court-selector {
@@ -987,19 +1042,7 @@ onMounted(() => {
   }
 
   .home-date-input {
-    width: 100%;
-    grid-template-columns: 1fr !important;
-    gap: 10px;
-  }
-
-  .home-date-input > span,
-  .home-date-input :deep(.u-input) {
-    width: 100%;
-  }
-
-  .home-date-input :deep(svg) {
-    width: 38px;
-    height: 38px;
+    grid-template-columns: 42px minmax(0, 1fr) 20px;
   }
 
   .slot-grid {

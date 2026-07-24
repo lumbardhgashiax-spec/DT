@@ -4,6 +4,35 @@ import type { BookingConfirmation } from '~/types/booking'
 const route = useRoute()
 const reference = computed(() => typeof route.query.reference === 'string' ? route.query.reference : '')
 const displayReference = computed(() => booking.value?.bookingReference || '')
+const isConfirmed = computed(() => Boolean(
+  booking.value
+  && ['confirmed', 'completed'].includes(booking.value.status)
+  && booking.value.paymentStatus === 'paid'
+))
+const isVerifying = computed(() => Boolean(
+  booking.value
+  && booking.value.status === 'pending'
+  && ['initializing', 'pending'].includes(booking.value.paymentStatus || 'pending')
+))
+const statusLabel = computed(() => {
+  if (isConfirmed.value) return 'Paguar dhe konfirmuar'
+  if (isVerifying.value) return 'Pagesa ne verifikim'
+  if (booking.value?.paymentStatus === 'expired') return 'Afati i pageses ka skaduar'
+  if (booking.value?.paymentStatus === 'refunded') return 'Pagesa eshte rimbursuar'
+  if (booking.value?.paymentStatus === 'chargeback') return 'Pagesa eshte kthyer'
+  if (booking.value?.paymentStatus === 'review') return 'Kerkohet verifikim nga stafi'
+  return 'Nuk eshte konfirmuar'
+})
+const pageTitle = computed(() => {
+  if (isConfirmed.value) return 'Rezervimi u konfirmua.'
+  if (isVerifying.value) return 'Po verifikojme pagesen.'
+  return 'Pagesa nuk u konfirmua.'
+})
+const statusIcon = computed(() => {
+  if (isConfirmed.value) return 'i-lucide-badge-check'
+  if (isVerifying.value) return 'i-lucide-loader-circle'
+  return 'i-lucide-circle-alert'
+})
 const calendarDownloadUrl = computed(() => reference.value
   ? `/api/public/booking/calendar?reference=${encodeURIComponent(reference.value)}`
   : '')
@@ -17,23 +46,51 @@ function formatPrice(value: number, currency: BookingConfirmation['currency']) {
   }).format(value)
 }
 
-const { data: booking, pending, error } = await useFetch<BookingConfirmation>('/api/public/booking/confirmation', {
+const { data: booking, pending, error, refresh } = await useFetch<BookingConfirmation>('/api/public/booking/confirmation', {
   query: { reference },
   immediate: Boolean(reference.value)
 })
 
+const checking = ref(false)
+let pollTimer: ReturnType<typeof setTimeout> | undefined
+let pollAttempts = 0
+
+function schedulePoll() {
+  if (!isVerifying.value || pollAttempts >= 20) return
+  pollTimer = setTimeout(async () => {
+    pollAttempts += 1
+    await refresh()
+    schedulePoll()
+  }, 2000)
+}
+
+async function checkAgain() {
+  checking.value = true
+  pollAttempts = 0
+  if (pollTimer) clearTimeout(pollTimer)
+  await refresh()
+  checking.value = false
+  schedulePoll()
+}
+
+onMounted(schedulePoll)
+
+onBeforeUnmount(() => {
+  if (pollTimer) clearTimeout(pollTimer)
+})
+
 useSeoMeta({
-  title: 'Rezervimi u konfirmua',
-  description: 'Konfirmimi i rezervimit ne Diamond Tennis Academy.'
+  title: 'Statusi i rezervimit',
+  description: 'Statusi i pageses dhe rezervimit ne Diamond Tennis Academy.'
 })
 </script>
 
 <template>
   <main class="success-page">
     <section class="success-panel">
-      <UIcon name="i-lucide-check-circle-2" />
-      <p>Rezervimi</p>
-      <h1>Konfirmimi u krye.</h1>
+      <UIcon :name="statusIcon" />
+      <p>{{ isConfirmed ? 'Rezervimi' : 'Pagesa' }}</p>
+      <h1>{{ pageTitle }}</h1>
 
       <div
         v-if="pending"
@@ -46,8 +103,24 @@ useSeoMeta({
         v-else-if="booking"
         class="success-panel__details"
       >
+        <UAlert
+          v-if="isVerifying"
+          color="warning"
+          variant="soft"
+          icon="i-lucide-clock-3"
+          title="Pagesa po kontrollohet"
+          description="Mos e kryej pagesen perseri. Konfirmimi shfaqet automatikisht sapo Paysera ta dergoje verifikimin."
+        />
+        <UAlert
+          v-else-if="!isConfirmed"
+          color="error"
+          variant="soft"
+          icon="i-lucide-circle-alert"
+          title="Rezervimi nuk eshte konfirmuar"
+          description="Kontakto stafin nese shuma eshte zbritur nga llogaria."
+        />
         <dl>
-          <div>
+          <div v-if="isConfirmed && displayReference">
             <dt>Referenca</dt>
             <dd>{{ displayReference }}</dd>
           </div>
@@ -67,6 +140,10 @@ useSeoMeta({
             <dt>Totali</dt>
             <dd>{{ formatPrice(booking.totalPrice, booking.currency) }}</dd>
           </div>
+          <div>
+            <dt>Statusi</dt>
+            <dd>{{ statusLabel }}</dd>
+          </div>
         </dl>
       </div>
 
@@ -80,7 +157,18 @@ useSeoMeta({
 
       <div class="success-panel__actions">
         <UButton
-          v-if="booking"
+          v-if="booking && !isConfirmed"
+          color="primary"
+          variant="soft"
+          size="lg"
+          icon="i-lucide-refresh-cw"
+          label="Kontrollo perseri"
+          :loading="checking"
+          class="success-panel__button"
+          @click="checkAgain"
+        />
+        <UButton
+          v-if="booking && isConfirmed"
           :to="calendarDownloadUrl"
           external
           color="primary"

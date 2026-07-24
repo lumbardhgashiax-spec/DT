@@ -14,14 +14,14 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 export function requireRecord(value: unknown) {
   if (!isRecord(value)) {
-    throw createError({ statusCode: 400, statusMessage: 'Të dhënat e fushës nuk janë valide.' })
+    throw createError({ statusCode: 400, message: 'Të dhënat e fushës nuk janë valide.' })
   }
   return value
 }
 
 export function requireUuid(value: unknown, message = 'ID-ja e fushës nuk është valide.') {
   if (typeof value !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)) {
-    throw createError({ statusCode: 400, statusMessage: message })
+    throw createError({ statusCode: 400, message: message })
   }
   return value
 }
@@ -29,21 +29,21 @@ export function requireUuid(value: unknown, message = 'ID-ja e fushës nuk ësht
 function requiredName(value: unknown) {
   const name = typeof value === 'string' ? value.trim().replace(/\s+/g, ' ') : ''
   if (!name || name.length > 100) {
-    throw createError({ statusCode: 400, statusMessage: 'Emri i fushës kërkohet dhe mund të ketë deri në 100 karaktere.' })
+    throw createError({ statusCode: 400, message: 'Emri i fushës kërkohet dhe mund të ketë deri në 100 karaktere.' })
   }
   return name
 }
 
 function courtType(value: unknown): CourtType {
   if (value === 'indoor' || value === 'outdoor') return value
-  throw createError({ statusCode: 400, statusMessage: 'Lloji i fushës nuk është valid.' })
+  throw createError({ statusCode: 400, message: 'Lloji i fushës nuk është valid.' })
 }
 
 function coordinate(value: unknown, label: string, min: number, max: number): number | null {
   if (value === null || value === undefined || value === '') return null
   const parsed = typeof value === 'number' ? value : Number(value)
   if (!Number.isFinite(parsed) || parsed < min || parsed > max) {
-    throw createError({ statusCode: 400, statusMessage: `${label} duhet të jetë nga ${min} deri në ${max}.` })
+    throw createError({ statusCode: 400, message: `${label} duhet të jetë nga ${min} deri në ${max}.` })
   }
   return parsed
 }
@@ -54,7 +54,7 @@ export function courtValues(input: unknown) {
   const latitude = coordinate(value.latitude, 'Gjerësia gjeografike', -90, 90)
   const longitude = coordinate(value.longitude, 'Gjatësia gjeografike', -180, 180)
   if ((latitude === null) !== (longitude === null)) {
-    throw createError({ statusCode: 400, statusMessage: 'Latitude dhe longitude duhen vendosur bashkë.' })
+    throw createError({ statusCode: 400, message: 'Latitude dhe longitude duhen vendosur bashkë.' })
   }
 
   return {
@@ -90,18 +90,18 @@ function imageTypeFromBytes(data: Uint8Array): (typeof allowedCourtImageTypes)[n
 
 export function validateCourtImage(file: { data: Uint8Array, type?: string, filename?: string }) {
   if (!file.data.length) {
-    throw createError({ statusCode: 400, statusMessage: 'Një fotografi është bosh.' })
+    throw createError({ statusCode: 400, message: 'Një fotografi është bosh.' })
   }
   if (file.data.length > maxCourtImageBytes) {
-    throw createError({ statusCode: 400, statusMessage: 'Secila fotografi mund të jetë maksimumi 8 MB.' })
+    throw createError({ statusCode: 400, message: 'Secila fotografi mund të jetë maksimumi 8 MB.' })
   }
   if (!allowedCourtImageTypes.includes(file.type as (typeof allowedCourtImageTypes)[number])) {
-    throw createError({ statusCode: 400, statusMessage: 'Pranohen vetëm fotografi JPG, PNG ose WebP.' })
+    throw createError({ statusCode: 400, message: 'Pranohen vetëm fotografi JPG, PNG ose WebP.' })
   }
 
   const detectedType = imageTypeFromBytes(file.data)
   if (!detectedType || detectedType !== file.type) {
-    throw createError({ statusCode: 400, statusMessage: 'Përmbajtja e fotografisë nuk përputhet me formatin e deklaruar.' })
+    throw createError({ statusCode: 400, message: 'Përmbajtja e fotografisë nuk përputhet me formatin e deklaruar.' })
   }
 
   return {

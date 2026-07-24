@@ -14,10 +14,16 @@ export default defineNuxtConfig({
     // Keep false unless the reverse proxy is known to overwrite
     // X-Forwarded-For with the actual visitor IP.
     bookingTrustProxy: process.env.NUXT_BOOKING_TRUST_PROXY === 'true',
-    openRouterApiKey: process.env.NUXT_OPENROUTER_API_KEY || '',
-    openRouterModel: process.env.NUXT_OPENROUTER_MODEL || 'openai/gpt-4o',
-    openRouterSiteUrl: process.env.NUXT_OPENROUTER_SITE_URL || process.env.NUXT_PUBLIC_SITE_URL || '',
-    openRouterSiteName: process.env.NUXT_OPENROUTER_SITE_NAME || 'Diamond Tennis Academy',
+    assistantProvider: process.env.NUXT_ASSISTANT_PROVIDER || 'openai-compatible',
+    assistantBaseUrl: process.env.NUXT_ASSISTANT_BASE_URL || 'http://192.168.0.29:11434',
+    assistantApiKey: process.env.NUXT_ASSISTANT_API_KEY || '',
+    assistantModel: process.env.NUXT_ASSISTANT_MODEL || 'gemma4:12b-mlx',
+    assistantSiteName: process.env.NUXT_ASSISTANT_SITE_NAME || 'Diamond Tennis Academy',
+    assistantDeveloperName: process.env.NUXT_ASSISTANT_DEVELOPER_NAME || 'Atomx Solutions SHPK',
+    payseraClientId: process.env.NUXT_PAYSERA_CLIENT_ID || '',
+    payseraClientSecret: process.env.NUXT_PAYSERA_CLIENT_SECRET || '',
+    payseraPaymentLinkLifetimeSeconds: Number(process.env.NUXT_PAYSERA_PAYMENT_LINK_LIFETIME_SECONDS || 900),
+    payseraReservationHoldSeconds: Number(process.env.NUXT_PAYSERA_RESERVATION_HOLD_SECONDS || 1200),
     public: {
       siteUrl: process.env.NUXT_PUBLIC_SITE_URL || '',
       diamondTennisLocationUrl: process.env.NUXT_PUBLIC_DIAMOND_TENNIS_LOCATION_URL || 'https://www.google.com/maps/search/?api=1&query=42.61092,21.17710',
@@ -30,16 +36,30 @@ export default defineNuxtConfig({
     '/': { headers: { 'cache-control': 'no-store' } },
     '/rezervo': { headers: { 'cache-control': 'no-store' } },
     '/fushat/**': { headers: { 'cache-control': 'no-store' } },
+    '/dashboard': { headers: { 'cache-control': 'no-store' } },
     '/dashboard/**': { headers: { 'cache-control': 'no-store' } },
+    '/kalendari': { headers: { 'cache-control': 'no-store' } },
     '/kalendari/**': { headers: { 'cache-control': 'no-store' } },
+    '/rezervimet': { headers: { 'cache-control': 'no-store' } },
     '/rezervimet/**': { headers: { 'cache-control': 'no-store' } },
+    '/menaxhimi': { headers: { 'cache-control': 'no-store' } },
     '/menaxhimi/**': { headers: { 'cache-control': 'no-store' } },
+    '/stafi': { headers: { 'cache-control': 'no-store' } },
     '/stafi/**': { headers: { 'cache-control': 'no-store' } },
+    '/raportet': { headers: { 'cache-control': 'no-store' } },
     '/raportet/**': { headers: { 'cache-control': 'no-store' } },
     '/api/**': { headers: { 'cache-control': 'no-store' } }
   },
 
   compatibilityDate: '2026-06-30',
+
+  vite: {
+    optimizeDeps: {
+      include: ['@tanstack/vue-table']
+    }
+  },
+
+  debug: false,
 
   eslint: {
     config: {
@@ -64,6 +84,8 @@ export default defineNuxtConfig({
         '/kalendari/**',
         '/rezervimet',
         '/rezervimet/**',
+        '/menaxhimi',
+        '/menaxhimi/**',
         '/menaxhimi/cmimet',
         '/menaxhimi/cmimet/**',
         '/menaxhimi/sezonet',

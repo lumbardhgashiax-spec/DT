@@ -1,18 +1,25 @@
 import { readBody } from 'h3'
 import {
-  createPublicBooking,
-  parsePublicCreateBookingInput,
   requirePublicBookingService,
   setPublicResponseHeaders
 } from '../../utils/publicBooking'
+import {
+  createPublicPayseraCheckout,
+  parsePublicCheckoutInput
+} from '../../utils/publicCheckout'
 import { enforcePublicRateLimit } from '../../utils/publicRateLimit'
 
 export default defineEventHandler(async (event) => {
   setPublicResponseHeaders(event)
   enforcePublicRateLimit(event, 'booking')
 
-  const input = parsePublicCreateBookingInput(await readBody<unknown>(event))
+  const input = parsePublicCheckoutInput(await readBody<unknown>(event))
   const client = await requirePublicBookingService(event)
+  const checkout = await createPublicPayseraCheckout(event, client, input)
 
-  return createPublicBooking(client, input)
+  return {
+    paymentStatus: checkout.paymentStatus,
+    checkoutUrl: checkout.checkoutUrl,
+    expiresAt: checkout.expiresAt
+  }
 })

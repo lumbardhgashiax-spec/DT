@@ -4,6 +4,7 @@ type Role = 'staff' | 'admin' | 'superadmin'
 type CourtType = 'outdoor' | 'indoor'
 type ReservationStatus = 'pending' | 'confirmed' | 'completed' | 'cancelled'
 type SeasonType = 'summer' | 'winter'
+type PaymentStatus = 'initializing' | 'pending' | 'paid' | 'failed' | 'cancelled' | 'expired' | 'refunded' | 'chargeback' | 'review'
 
 export interface Database {
   public: {
@@ -56,6 +57,18 @@ export interface Database {
         Update: { booking_reference?: string, customer_id?: string, court_id?: string, season_id?: string, price_rule_id?: string | null, start_at?: string, end_at?: string, with_heating?: boolean, status?: ReservationStatus, price?: number, notes?: string | null, updated_at?: string }
         Relationships: []
       }
+      payment_transactions: {
+        Row: { id: string, reservation_id: string, checkout_request_id: string, request_fingerprint: string, provider: 'paysera', provider_order_id: string | null, provider_link_id: string | null, checkout_url: string | null, status: PaymentStatus, amount_minor: number, currency: string, expires_at: string, paid_at: string | null, provider_updated_at: string | null, created_at: string, updated_at: string }
+        Insert: { id?: string, reservation_id: string, checkout_request_id: string, request_fingerprint: string, provider?: 'paysera', provider_order_id?: string | null, provider_link_id?: string | null, checkout_url?: string | null, status?: PaymentStatus, amount_minor: number, currency: string, expires_at: string, paid_at?: string | null, provider_updated_at?: string | null, created_at?: string, updated_at?: string }
+        Update: { provider_order_id?: string | null, provider_link_id?: string | null, checkout_url?: string | null, status?: PaymentStatus, expires_at?: string, paid_at?: string | null, provider_updated_at?: string | null, updated_at?: string }
+        Relationships: []
+      }
+      payment_webhook_events: {
+        Row: { id: string, callback_id: string, request_id: string | null, provider_order_id: string, event_type: string, event_name: string, payload_sha256: string, provider_created_at: string | null, processed_status: string, is_test: boolean, created_at: string }
+        Insert: { id?: string, callback_id: string, request_id?: string | null, provider_order_id: string, event_type: string, event_name: string, payload_sha256: string, provider_created_at?: string | null, processed_status: string, is_test?: boolean, created_at?: string }
+        Update: Record<string, never>
+        Relationships: []
+      }
     }
     Views: Record<string, never>
     Functions: {
@@ -78,6 +91,73 @@ export interface Database {
           p_status: ReservationStatus
           p_notes: string | null
           p_extra_service_ids?: string[]
+        }
+        Returns: string
+      }
+      release_expired_paysera_holds: {
+        Args: Record<string, never>
+        Returns: number
+      }
+      register_paysera_checkout: {
+        Args: {
+          p_checkout_request_id: string
+          p_request_fingerprint: string
+          p_booking_reference: string
+          p_first_name: string
+          p_last_name: string
+          p_phone: string
+          p_email: string | null
+          p_court_id: string
+          p_season_id: string
+          p_price_rule_id: string
+          p_start_at: string
+          p_end_at: string
+          p_total_price: number
+          p_amount_minor: number
+          p_currency: string
+          p_extra_service_ids: string[]
+          p_expires_at: string
+        }
+        Returns: Array<{
+          reservation_id: string
+          booking_reference: string
+          payment_id: string
+          payment_status: PaymentStatus
+          provider_order_id: string | null
+          provider_link_id: string | null
+          checkout_url: string | null
+          created_at: string
+          created_new: boolean
+        }>
+      }
+      set_paysera_checkout_details: {
+        Args: {
+          p_payment_id: string
+          p_provider_order_id: string
+          p_provider_link_id: string
+          p_checkout_url: string
+        }
+        Returns: undefined
+      }
+      fail_paysera_checkout: {
+        Args: { p_payment_id: string }
+        Returns: undefined
+      }
+      process_paysera_webhook: {
+        Args: {
+          p_callback_id: string
+          p_request_id: string
+          p_provider_order_id: string
+          p_merchant_order_id: string
+          p_event_type: string
+          p_event_name: string
+          p_payload_sha256: string
+          p_provider_created_at: string
+          p_provider_status: string
+          p_amount_minor: number
+          p_amount_paid_minor: number
+          p_currency: string
+          p_is_test: boolean
         }
         Returns: string
       }

@@ -37,7 +37,7 @@ export interface AssistantApiRequest {
 export interface AssistantApiResponse {
   message: string
   booking?: BookingDraft
-  provider: 'openrouter' | 'openai' | 'unavailable'
+  provider: 'openrouter' | 'openai' | 'openai-compatible' | 'unavailable'
 }
 
 export interface AssistantUiError {

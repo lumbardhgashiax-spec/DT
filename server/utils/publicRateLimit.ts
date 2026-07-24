@@ -75,7 +75,7 @@ export function enforcePublicRateLimit(event: H3Event, bucket: PublicRateLimitBu
     setResponseHeader(event, 'retry-after', retryAfter)
     throw createError({
       statusCode: 429,
-      statusMessage: 'Shumë kërkesa në pak kohë. Provo përsëri pas pak.'
+      message: 'Shumë kërkesa në pak kohë. Provo përsëri pas pak.'
     })
   }
 

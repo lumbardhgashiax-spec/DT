@@ -1,4 +1,5 @@
 import type { H3Event } from 'h3'
+import { randomUUID } from 'node:crypto'
 import {
   ACADEMY_TIME_ZONE,
   PUBLIC_CLOSING_HOUR,
@@ -6,10 +7,8 @@ import {
   PUBLIC_OPENING_HOUR,
   PUBLIC_SLOT_MINUTES,
   academyDateTimeToIso,
-  createPublicBooking,
   parsePublicDate,
   parsePublicBookingSelection,
-  parsePublicCreateBookingInput,
   publicDayRange,
   publicEndTime,
   publicQuoteResponse,
@@ -17,6 +16,10 @@ import {
   requirePublicBookingService,
   resolvePublicBookingQuote
 } from './publicBooking'
+import {
+  createPublicPayseraCheckout,
+  parsePublicCheckoutInput
+} from './publicCheckout'
 import { listPublicCourts, listPublicExtraServices } from './publicCourts'
 import type { PublicCourt } from './publicCourts'
 
@@ -382,22 +385,35 @@ export async function executeAssistantBookingTool(
         }
       }
 
-      const input = parsePublicCreateBookingInput({
+      const input = parsePublicCheckoutInput({
         courtId: args.courtId,
         date: args.date,
         time: args.time,
         durationMinutes: args.durationMinutes,
         extraServiceIds: stringArrayValue(args.extraServiceIds),
-        customer: args.customer
+        customer: args.customer,
+        checkoutRequestId: randomUUID()
       })
       const client = await requirePublicBookingService(event)
-      const confirmation = await createPublicBooking(client, input)
+      const confirmation = await createPublicPayseraCheckout(event, client, input)
 
       return {
         ok: true,
-        confirmation,
+        confirmation: {
+          courtName: confirmation.courtName,
+          date: confirmation.date,
+          time: confirmation.time,
+          endTime: confirmation.endTime,
+          durationMinutes: confirmation.durationMinutes,
+          totalPrice: confirmation.totalPrice,
+          currency: confirmation.currency,
+          status: confirmation.status,
+          paymentStatus: confirmation.paymentStatus,
+          checkoutUrl: confirmation.checkoutUrl,
+          expiresAt: confirmation.expiresAt
+        },
         equipmentNote: equipmentNote(),
-        staffInstruction: 'Klienti duhet t\'ia tregoje kete reference stafit administrativ kur te arrije.'
+        staffInstruction: 'Rezervimi konfirmohet vetem pas pageses. Pas konfirmimit, klienti duhet t\'ia tregoje referencen stafit administrativ kur te arrije.'
       }
     }
 

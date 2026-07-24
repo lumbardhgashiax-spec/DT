@@ -18,7 +18,7 @@ export default defineEventHandler(async (event) => {
   })
 
   if (authError || !authData.user) {
-    throw createError({ statusCode: 400, statusMessage: authError?.message || 'Llogaria nuk u krijua.' })
+    throw createError({ statusCode: 400, message: authError?.message || 'Llogaria nuk u krijua.' })
   }
 
   const { data: profile, error: profileError } = await serviceClient
@@ -36,7 +36,7 @@ export default defineEventHandler(async (event) => {
 
   if (profileError) {
     await serviceClient.auth.admin.deleteUser(authData.user.id)
-    throw createError({ statusCode: 500, statusMessage: 'Profili nuk u krijua; llogaria Auth u rikthye.' })
+    throw createError({ statusCode: 500, message: 'Profili nuk u krijua; llogaria Auth u rikthye.' })
   }
 
   return profile

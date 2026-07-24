@@ -13,15 +13,15 @@ export default defineEventHandler(async (event) => {
     .eq('court_id', courtId)
     .maybeSingle()
 
-  if (imageError) throw createError({ statusCode: 500, statusMessage: 'Fotografia nuk mund të verifikohej.' })
-  if (!image) throw createError({ statusCode: 404, statusMessage: 'Fotografia nuk u gjet.' })
+  if (imageError) throw createError({ statusCode: 500, message: 'Fotografia nuk mund të verifikohej.' })
+  if (!image) throw createError({ statusCode: 404, message: 'Fotografia nuk u gjet.' })
 
   const { error: rowError } = await client.from('court_images').delete().eq('id', image.id)
-  if (rowError) throw createError({ statusCode: 500, statusMessage: 'Fotografia nuk mund të fshihej.' })
+  if (rowError) throw createError({ statusCode: 500, message: 'Fotografia nuk mund të fshihej.' })
 
   const { error: storageError } = await client.storage.from(courtImageBucket).remove([image.storage_path])
   if (storageError) {
-    throw createError({ statusCode: 500, statusMessage: 'Fotografia u largua nga galeria, por skedari duhet të pastrohet nga storage.' })
+    throw createError({ statusCode: 500, message: 'Fotografia u largua nga galeria, por skedari duhet të pastrohet nga storage.' })
   }
 
   return { success: true }
