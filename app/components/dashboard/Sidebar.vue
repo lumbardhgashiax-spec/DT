@@ -49,7 +49,7 @@ function navigationItems(state: 'collapsed' | 'expanded') {
     },
     {
       label: 'Festat zyrtare',
-      icon: 'i-lucide-calendar-off-2',
+      icon: 'i-lucide-calendar-off',
       to: '/menaxhimi/festat-zyrtare',
       active: route.path.startsWith('/menaxhimi/festat-zyrtare'),
       onSelect: closeOnMobile
