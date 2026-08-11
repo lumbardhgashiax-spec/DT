@@ -3,6 +3,7 @@ import { createError, setResponseHeader } from 'h3'
 import type { H3Event } from 'h3'
 import { serverSupabaseServiceRole } from '#supabase/server'
 import type { Database, TableRow } from '~/types/database.types'
+import { requirePublicBookableDate } from './officialHolidays'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -463,8 +464,9 @@ export async function resolvePublicBookingQuote(
   client: PublicServiceClient,
   input: PublicBookingSelection
 ): Promise<ResolvedPublicQuote> {
-  const [courtResult, seasonResult] = await Promise.all([
+  const [courtResult, , seasonResult] = await Promise.all([
     requireActivePublicCourt(client, input.courtId),
+    requirePublicBookableDate(client, input.date),
     client
       .from('seasons')
       .select('*')

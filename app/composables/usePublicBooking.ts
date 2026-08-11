@@ -1,5 +1,6 @@
 import { bookingConfig, getBusinessToday } from '~/config/booking'
-import type { BookingCheckout, BookingQuote, BookingSlot, CourtId, PublicBookingOptions } from '~/types/booking'
+import type { BookingCheckout, BookingHoliday, BookingQuote, BookingSlot, CourtId, PublicBookingOptions } from '~/types/booking'
+import { holidayDates, holidayForDate } from '~/utils/officialHolidays'
 
 export interface PublicBookingCustomer {
   firstName: string
@@ -83,6 +84,7 @@ export function usePublicBooking() {
   const extraServiceIds = ref<string[]>([])
   const maximumDurationNotice = ref(false)
   const slots = ref<BookingSlot[]>([])
+  const availabilityHoliday = ref<BookingHoliday | null>(null)
   const quote = ref<BookingQuote | null>(null)
   const confirmation = ref<BookingCheckout | null>(null)
   const legalAccepted = ref(false)
@@ -105,6 +107,14 @@ export function usePublicBooking() {
   const paymentAvailable = computed(() => options.value?.payment.available ?? false)
   const courts = computed(() => options.value?.courts ?? [])
   const extraServices = computed(() => options.value?.extraServices ?? [])
+  const holidays = computed(() => options.value?.holidays ?? [])
+  const unavailableDates = computed(() => holidayDates(holidays.value))
+  const selectedHoliday = computed(() => (
+    holidayForDate(holidays.value, date.value)
+    ?? (availabilityHoliday.value && date.value >= availabilityHoliday.value.startsOn && date.value <= availabilityHoliday.value.endsOn
+      ? availabilityHoliday.value
+      : null)
+  ))
   const selectedCourt = computed(() => courts.value.find(court => court.id === courtId.value))
   const selectedExtraServices = computed(() => {
     const selected = new Set(extraServiceIds.value)
@@ -192,6 +202,7 @@ export function usePublicBooking() {
     availabilityRequest += 1
     quoteRequest += 1
     slots.value = []
+    availabilityHoliday.value = null
     loadingSlots.value = false
     loadingQuote.value = false
     time.value = ''
@@ -231,7 +242,7 @@ export function usePublicBooking() {
   }
 
   function selectDate(value: string) {
-    if (!selectedCourt.value || !value || value < minDate.value) {
+    if (!selectedCourt.value || !value || value < minDate.value || holidayForDate(holidays.value, value)) {
       return
     }
 
@@ -316,6 +327,7 @@ export function usePublicBooking() {
         !nextCourtId
         || !/^\d{4}-\d{2}-\d{2}$/.test(date.value)
         || date.value < getBusinessToday(response.timezone)
+        || Boolean(holidayForDate(response.holidays, date.value))
       ) {
         clearSelectionAfterCourtOrDateChange()
         date.value = ''
@@ -362,11 +374,13 @@ export function usePublicBooking() {
 
       if (requestId === availabilityRequest) {
         slots.value = response.slots
+        availabilityHoliday.value = response.holiday
       }
-    } catch {
+    } catch (cause) {
       if (requestId === availabilityRequest) {
-        error.value = 'Nuk ka lidhje me terminet. Provo perseri.'
+        error.value = getResponseMessage(cause) || 'Nuk ka lidhje me terminet. Provo perseri.'
         slots.value = []
+        availabilityHoliday.value = null
       }
     } finally {
       if (requestId === availabilityRequest) {
@@ -399,9 +413,9 @@ export function usePublicBooking() {
       if (requestId === quoteRequest) {
         quote.value = response
       }
-    } catch {
+    } catch (cause) {
       if (requestId === quoteRequest) {
-        error.value = 'Rezervimi nuk u verifikua. Asnje rezervim nuk eshte krijuar.'
+        error.value = getResponseMessage(cause) || 'Rezervimi nuk u verifikua. Asnje rezervim nuk eshte krijuar.'
         quote.value = null
       }
     } finally {
@@ -454,6 +468,8 @@ export function usePublicBooking() {
 
       if (statusCode === 409 && responseMessage.toLowerCase().includes('termin')) {
         error.value = 'Ky termin sapo u rezervua. Po te tregojme alternativat e lira.'
+      } else if (statusCode === 409) {
+        error.value = responseMessage || 'Data e zgjedhur nuk është më e disponueshme.'
       } else if (statusCode === 422) {
         error.value = responseMessage || 'Kontrollo te dhenat e rezervimit dhe provo perseri.'
       } else if (statusCode === 429) {
@@ -507,6 +523,9 @@ export function usePublicBooking() {
     isCustomerValid,
     courts,
     extraServices,
+    holidays,
+    unavailableDates,
+    selectedHoliday,
     selectedExtraServices,
     season,
     hasCurrentQuote,

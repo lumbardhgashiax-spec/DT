@@ -90,6 +90,8 @@ export default defineNuxtConfig({
         '/menaxhimi/cmimet/**',
         '/menaxhimi/sezonet',
         '/menaxhimi/sezonet/**',
+        '/menaxhimi/festat-zyrtare',
+        '/menaxhimi/festat-zyrtare/**',
         '/menaxhimi/fushat',
         '/menaxhimi/fushat/**',
         '/menaxhimi/sherbime-shtese',

@@ -6,6 +6,7 @@ import {
   PUBLIC_DURATION_MINUTES,
   PUBLIC_OPENING_HOUR,
   PUBLIC_SLOT_MINUTES,
+  academyDateFromIso,
   academyDateTimeToIso,
   parsePublicDate,
   parsePublicBookingSelection,
@@ -22,6 +23,7 @@ import {
 } from './publicCheckout'
 import { listPublicCourts, listPublicExtraServices } from './publicCourts'
 import type { PublicCourt } from './publicCourts'
+import { findPublicOfficialHoliday, listPublicOfficialHolidays } from './officialHolidays'
 
 type AssistantBookingToolName
   = | 'get_booking_options'
@@ -256,9 +258,10 @@ export async function executeAssistantBookingTool(
   try {
     if (name === 'get_booking_options') {
       const client = await requirePublicBookingService(event)
-      const [courts, extraServices] = await Promise.all([
+      const [courts, extraServices, holidays] = await Promise.all([
         listPublicCourts(client, false),
-        listPublicExtraServices(client)
+        listPublicExtraServices(client),
+        listPublicOfficialHolidays(client, academyDateFromIso(new Date().toISOString()))
       ])
 
       return {
@@ -277,6 +280,7 @@ export async function executeAssistantBookingTool(
           label: `${court.name} (${courtTypeLabel(court.courtType)})`
         })),
         extraServices,
+        holidays,
         equipmentNote: equipmentNote()
       }
     }
@@ -287,7 +291,11 @@ export async function executeAssistantBookingTool(
       const requestedCourtId = stringValue(args.courtId)
       const requestedCourtType = stringValue(args.courtType)
       const client = await requirePublicBookingService(event)
-      const courts = (await listPublicCourts(client, false))
+      const [allCourts, holiday] = await Promise.all([
+        listPublicCourts(client, false),
+        findPublicOfficialHoliday(client, date)
+      ])
+      const courts = allCourts
         .filter(court => !requestedCourtId || court.id === requestedCourtId)
         .filter(court => !requestedCourtType || court.courtType === requestedCourtType)
 
@@ -295,6 +303,25 @@ export async function executeAssistantBookingTool(
         return {
           ok: false,
           message: 'Nuk gjeta fushe aktive me kete preference.'
+        }
+      }
+
+      if (holiday) {
+        return {
+          ok: true,
+          date,
+          timezone: ACADEMY_TIME_ZONE,
+          durationMinutes,
+          holiday,
+          message: `Më ${date} rezervimet online janë të mbyllura për festën “${holiday.name}”.`,
+          courts: courts.map(court => ({
+            courtId: court.id,
+            courtName: court.name,
+            courtType: court.courtType,
+            courtLabel: `${court.name} (${courtTypeLabel(court.courtType)})`,
+            availableTimes: []
+          })),
+          hasAvailability: false
         }
       }
 

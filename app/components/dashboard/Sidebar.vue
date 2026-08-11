@@ -48,6 +48,13 @@ function navigationItems(state: 'collapsed' | 'expanded') {
       onSelect: closeOnMobile
     },
     {
+      label: 'Festat zyrtare',
+      icon: 'i-lucide-calendar-off-2',
+      to: '/menaxhimi/festat-zyrtare',
+      active: route.path.startsWith('/menaxhimi/festat-zyrtare'),
+      onSelect: closeOnMobile
+    },
+    {
       label: 'Çmimet',
       icon: 'i-lucide-badge-euro',
       to: '/menaxhimi/cmimet',

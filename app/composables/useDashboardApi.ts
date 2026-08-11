@@ -72,6 +72,9 @@ export interface DashboardApiActions {
   'extra-services.list': DashboardActionDefinition<undefined, TableRow<'extra_services'>[]>
   'extra-services.save': DashboardActionDefinition<Record<string, unknown>, boolean>
   'extra-services.delete': DashboardActionDefinition<{ id: string }, boolean>
+  'official-holidays.list': DashboardActionDefinition<undefined, TableRow<'official_holidays'>[]>
+  'official-holidays.save': DashboardActionDefinition<Record<string, unknown>, boolean>
+  'official-holidays.delete': DashboardActionDefinition<{ id: string }, boolean>
   'staff.list': DashboardActionDefinition<undefined, DashboardProfile[]>
 }
 
@@ -236,6 +239,9 @@ export function useDashboardApi() {
     listExtraServices: () => call('extra-services.list'),
     saveExtraService: (payload: Record<string, unknown>) => call('extra-services.save', payload),
     deleteExtraService: (id: string) => call('extra-services.delete', { id }),
+    listOfficialHolidays: () => call('official-holidays.list'),
+    saveOfficialHoliday: (payload: Record<string, unknown>) => call('official-holidays.save', payload),
+    deleteOfficialHoliday: (id: string) => call('official-holidays.delete', { id }),
     listStaff: () => call('staff.list'),
     getStaff: () => endpoint<TableRow<'profiles'>[]>('/api/staff'),
     createStaff: (payload: Record<string, unknown>) => endpoint<TableRow<'profiles'>>('/api/staff', { method: 'POST', body: payload }),

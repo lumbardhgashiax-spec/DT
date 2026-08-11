@@ -12,6 +12,7 @@ Ky dokument është referenca e ruajtur për strukturën aktuale të Supabase. S
 | `court_images` | Galeria e fushave | `court_id`, `storage_path`, `original_name`, `sort_order`, `created_by` |
 | `extra_services` | Shërbime shtesë të menaxhueshme | `name`, `description`, `price`, `is_active`, `created_by` |
 | `seasons` | Sezonet e çmimeve | `name`, `season_type`, `starts_on`, `ends_on`, `is_active` |
+| `official_holidays` | Festat zyrtare që mbyllin rezervimin online | `name`, `starts_on`, `ends_on`, `notes`, `is_active`, `created_by` |
 | `price_rules` | Çmimet bazë për 1 orë | `season_id`, `court_type`, `with_heating`, `duration_minutes = 60`, `price`, `is_active` |
 | `reservations` | Terminet | `customer_id`, `court_id`, `season_id`, `price_rule_id`, `start_at`, `end_at`, `with_heating`, `status`, `price` |
 
@@ -19,7 +20,7 @@ Ky dokument është referenca e ruajtur për strukturën aktuale të Supabase. S
 
 ```text
 auth.users → profiles
-profiles → customers / court_images / extra_services / reservations
+profiles → customers / court_images / extra_services / official_holidays / reservations
 customers → reservations
 courts → court_images
 courts → reservations
@@ -32,6 +33,7 @@ seasons → price_rules → reservations
 - `staff` mund të lexojë të dhënat që i duhen dashboard-it; ndryshimet e menaxhimit kufizohen te `admin` dhe `superadmin`.
 - Sezonet aktive nuk mund të mbivendosen.
 - Rezervimet aktive nuk mund të mbivendosen në të njëjtën fushë.
+- Festat zyrtare aktive nuk mund të mbivendosen. Ato bllokojnë rezervimet publike në UI, API dhe databazë; rezervimet manuale të stafit mbeten të mundshme.
 - `latitude` duhet të jetë nga `-90` deri në `90`; `longitude` nga `-180` deri në `180`. Ose ruhen të dyja, ose asnjëra.
 - `supports_heating`, `price_rules.with_heating` dhe `reservations.with_heating` ruhen ende për përputhshmëri me rezervimet/çmimet ekzistuese. Konfigurimi i ri i ngrohjes bëhet te `extra_services`, jo te faqja e fushave.
 - Çdo rezervim përdor çmimin bazë të rregullit `with_heating = false`; shërbimet shtesë zgjedhen veçmas dhe i shtohen çmimit total.
@@ -78,6 +80,7 @@ Skedarët nuk ruhen në tabelë. `court_images.storage_path` i referohet bucket-
 | 8 | `202607200008_half_hour_reservation_ranges.sql` | Intervalet e rezervimit në hapa prej 30 minutash dhe llogaritja proporcionale e çmimit |
 | 9 | `202607200009_reservation_pricing_function.sql` | Krijon vetëm RPC-në e rezervimit nga tabelat ekzistuese; nuk ndryshon tabela |
 | 10 | `202607200010_prevent_reservation_overlap.sql` | Ndalon përplasjen e termineve në të njëjtën fushë |
+| 15 | `202608110015_official_holidays.sql` | Festat zyrtare, politikat e stafit dhe bllokimi transaksional i rezervimeve publike |
 
 Ekzekuto migration-et në këtë rend në Supabase SQL Editor. Migration-et 003 dhe 005 krijojnë edhe schema-n private të përdorur për kontrollet e roleve, prandaj mund të përdoren edhe nëse schema `private` mungon.
 

@@ -24,6 +24,9 @@ const actions = [
   'extra-services.list',
   'extra-services.save',
   'extra-services.delete',
+  'official-holidays.list',
+  'official-holidays.save',
+  'official-holidays.delete',
   'staff.list'
 ] as const
 
@@ -131,6 +134,73 @@ function foreignKeyDeleteError(error: { code?: string } | null, label: string) {
     return createError({ statusCode: 409, message: `${label} nuk mund te fshihet sepse perdoret nga rezervime ose te dhena te tjera.` })
   }
   return createError({ statusCode: 400, message: `${label} nuk mund te fshihet.` })
+}
+
+function calendarDate(value: unknown, field: string) {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    throw createError({ statusCode: 400, message: `${field} nuk është valide.` })
+  }
+
+  const parts = value.split('-')
+  const year = Number(parts[0])
+  const month = Number(parts[1])
+  const day = Number(parts[2])
+  const parsed = new Date(Date.UTC(year, month - 1, day))
+  if (
+    parsed.getUTCFullYear() !== year
+    || parsed.getUTCMonth() !== month - 1
+    || parsed.getUTCDate() !== day
+  ) {
+    throw createError({ statusCode: 400, message: `${field} nuk është valide.` })
+  }
+
+  return value
+}
+
+function calendarDayDifference(startsOn: string, endsOn: string) {
+  return Math.round((Date.parse(`${endsOn}T12:00:00Z`) - Date.parse(`${startsOn}T12:00:00Z`)) / 86_400_000)
+}
+
+function officialHolidayValues(payload: Record<string, unknown>) {
+  const name = String(payload.name || '').trim()
+  const notes = typeof payload.notes === 'string' ? payload.notes.trim() : ''
+  const startsOn = calendarDate(payload.startsOn, 'Data e fillimit')
+  const endsOn = calendarDate(payload.endsOn, 'Data e përfundimit')
+  const dayDifference = calendarDayDifference(startsOn, endsOn)
+
+  if (name.length < 2 || name.length > 100) {
+    throw createError({ statusCode: 400, message: 'Emri i festës duhet të ketë 2 deri në 100 karaktere.' })
+  }
+  if (notes.length > 500) {
+    throw createError({ statusCode: 400, message: 'Shënimet mund të kenë maksimumi 500 karaktere.' })
+  }
+  if (dayDifference < 0 || dayDifference > 30) {
+    throw createError({ statusCode: 400, message: 'Periudha e festës duhet të jetë nga 1 deri në 31 ditë.' })
+  }
+
+  return {
+    name,
+    starts_on: startsOn,
+    ends_on: endsOn,
+    notes: notes || null,
+    is_active: payload.isActive !== false
+  }
+}
+
+function officialHolidayWriteError(error: unknown) {
+  if (!isRecord(error)) return createError({ statusCode: 400, message: 'Festa zyrtare nuk mund të ruhej.' })
+  const message = typeof error.message === 'string' ? error.message : ''
+
+  if (error.code === '23P01') {
+    return createError({ statusCode: 409, message: 'Kjo periudhë mbivendoset me një festë tjetër aktive.' })
+  }
+  if (error.code === 'P0001' && message.includes('HOLIDAY_HAS_PUBLIC_RESERVATIONS')) {
+    return createError({
+      statusCode: 409,
+      message: 'Në këtë periudhë ka rezervime online aktive. Anuloji ose zhvendosi para se ta aktivizosh festën.'
+    })
+  }
+  return createError({ statusCode: 400, message: message || 'Festa zyrtare nuk mund të ruhej.' })
 }
 
 function dateMonthDayKey(date: string) {
@@ -476,6 +546,33 @@ export default defineEventHandler(async (event) => {
       const { error, count } = await access.client.from('extra_services').delete({ count: 'exact' }).eq('id', id)
       if (error) throw foreignKeyDeleteError(error, 'Sherbimi')
       if (!count) throw createError({ statusCode: 404, message: 'Sherbimi nuk u gjet.' })
+      return { action: body.action, data: true }
+    }
+
+    case 'official-holidays.list': {
+      const { data, error } = await access.client
+        .from('official_holidays')
+        .select('*')
+        .order('starts_on', { ascending: true })
+      if (error) throw databaseError('Festat zyrtare nuk mund të ngarkoheshin.', error)
+      return { action: body.action, data: data || [] }
+    }
+
+    case 'official-holidays.save': {
+      const values = officialHolidayValues(payload)
+      const editingId = typeof payload.id === 'string' ? requiredUuid(payload.id, 'Festa zyrtare') : null
+      const result = editingId
+        ? await access.client.from('official_holidays').update(values).eq('id', editingId)
+        : await access.client.from('official_holidays').insert({ ...values, created_by: access.userId })
+      if (result.error) throw officialHolidayWriteError(result.error)
+      return { action: body.action, data: true }
+    }
+
+    case 'official-holidays.delete': {
+      const id = requiredUuid(payload.id, 'Festa zyrtare')
+      const { error, count } = await access.client.from('official_holidays').delete({ count: 'exact' }).eq('id', id)
+      if (error) throw createError({ statusCode: 400, message: 'Festa zyrtare nuk mund të fshihej.' })
+      if (!count) throw createError({ statusCode: 404, message: 'Festa zyrtare nuk u gjet.' })
       return { action: body.action, data: true }
     }
 

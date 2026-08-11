@@ -45,6 +45,12 @@ export interface Database {
         Update: { name?: string, season_type?: SeasonType, starts_on?: string, ends_on?: string, is_active?: boolean, updated_at?: string }
         Relationships: []
       }
+      official_holidays: {
+        Row: { id: string, name: string, starts_on: string, ends_on: string, notes: string | null, is_active: boolean, created_by: string | null, created_at: string, updated_at: string }
+        Insert: { id?: string, name: string, starts_on: string, ends_on: string, notes?: string | null, is_active?: boolean, created_by?: string | null, created_at?: string, updated_at?: string }
+        Update: { name?: string, starts_on?: string, ends_on?: string, notes?: string | null, is_active?: boolean, updated_at?: string }
+        Relationships: []
+      }
       price_rules: {
         Row: { id: string, season_id: string, court_type: CourtType, with_heating: boolean, duration_minutes: number, price: number, is_active: boolean, created_at: string, updated_at: string }
         Insert: { id?: string, season_id: string, court_type: CourtType, with_heating?: boolean, duration_minutes: number, price: number, is_active?: boolean, created_at?: string, updated_at?: string }

@@ -134,6 +134,7 @@ function formatDuration(minutes: number) {
           <BookingDatePicker
             :model-value="booking.date.value"
             :min="booking.minDate.value"
+            :unavailable-dates="booking.unavailableDates.value"
             @update:model-value="booking.selectDate"
           >
             <template #trigger="{ open }">
@@ -168,14 +169,26 @@ function formatDuration(minutes: number) {
               v-for="day in booking.nextDates.value"
               :key="day"
               type="button"
-              :class="{ 'is-active': booking.date.value === day }"
+              :disabled="Boolean(booking.holidays.value.find(holiday => day >= holiday.startsOn && day <= holiday.endsOn))"
+              :class="{
+                'is-active': booking.date.value === day,
+                'is-holiday': Boolean(booking.holidays.value.find(holiday => day >= holiday.startsOn && day <= holiday.endsOn))
+              }"
               :aria-pressed="booking.date.value === day"
+              :title="booking.holidays.value.find(holiday => day >= holiday.startsOn && day <= holiday.endsOn)?.name"
               @click="booking.selectDate(day)"
             >
               <strong>{{ formatSuggestedDate(day) }}</strong>
-              <span>{{ day }}</span>
+              <span>{{ booking.holidays.value.find(holiday => day >= holiday.startsOn && day <= holiday.endsOn)?.name || day }}</span>
             </button>
           </div>
+          <p class="booking-holiday-legend">
+            <UIcon
+              name="i-lucide-info"
+              aria-hidden="true"
+            />
+            Festat zyrtare shfaqen të bllokuara dhe nuk mund të rezervohen online.
+          </p>
         </fieldset>
 
         <fieldset
@@ -212,6 +225,15 @@ function formatDuration(minutes: number) {
               />
             </button>
           </div>
+          <UAlert
+            v-if="booking.selectedHoliday.value"
+            color="warning"
+            variant="soft"
+            icon="i-lucide-calendar-off"
+            title="Datë e mbyllur për rezervime"
+            :description="`Festa zyrtare: ${booking.selectedHoliday.value.name}`"
+            class="mt-3"
+          />
           <UAlert
             v-if="!booking.loadingSlots.value && !booking.slots.value.length"
             color="warning"
@@ -758,6 +780,28 @@ legend span {
 .date-strip button:hover {
   border-color: rgba(255, 112, 71, 0.72);
   background: #FFF4F0;
+}
+
+.date-strip button.is-holiday,
+.date-strip button.is-holiday:hover {
+  border-color: rgba(185, 74, 49, 0.24);
+  background: #FFF4F1;
+  color: #9A3D29;
+  cursor: not-allowed;
+  opacity: 0.78;
+}
+
+.date-strip button.is-holiday span {
+  color: #B94A31;
+}
+
+.booking-holiday-legend {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 0.82rem;
 }
 
 .date-strip button.is-active {

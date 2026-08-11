@@ -12,6 +12,7 @@ import {
 } from '../../utils/publicBooking'
 import { enforcePublicRateLimit } from '../../utils/publicRateLimit'
 import { releaseExpiredPayseraHolds } from '../../utils/publicCheckout'
+import { findPublicOfficialHoliday } from '../../utils/officialHolidays'
 
 export default defineEventHandler(async (event) => {
   setPublicResponseHeaders(event)
@@ -23,7 +24,20 @@ export default defineEventHandler(async (event) => {
   const client = await requirePublicBookingService(event)
 
   await releaseExpiredPayseraHolds(client)
-  await requireActivePublicCourt(client, courtId)
+  const [, holiday] = await Promise.all([
+    requireActivePublicCourt(client, courtId),
+    findPublicOfficialHoliday(client, date)
+  ])
+
+  if (holiday) {
+    const slots = publicSlotTimes().map(time => ({
+      courtId,
+      date,
+      time,
+      available: false
+    }))
+    return { courtId, date, slots, holiday }
+  }
 
   const { startAt, endAt } = publicDayRange(date)
   const { data: reservations, error } = await client
@@ -68,5 +82,5 @@ export default defineEventHandler(async (event) => {
     }
   })
 
-  return { courtId, date, slots }
+  return { courtId, date, slots, holiday: null }
 })

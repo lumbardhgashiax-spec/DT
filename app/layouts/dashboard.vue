@@ -11,6 +11,7 @@ const pageTitle = computed(() => {
   if (route.path.startsWith('/rezervimet')) return 'Rezervimet'
   if (route.path.startsWith('/menaxhimi/fushat')) return 'Fushat'
   if (route.path.startsWith('/menaxhimi/sezonet')) return 'Sezonet'
+  if (route.path.startsWith('/menaxhimi/festat-zyrtare')) return 'Festat zyrtare'
   if (route.path.startsWith('/menaxhimi/cmimet')) return 'Çmimet'
   if (route.path.startsWith('/menaxhimi/sherbime-shtese')) return 'Shërbime shtesë'
   if (route.path.startsWith('/stafi')) return 'Stafi dhe rolet'

@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { bookingConfig, getBusinessToday } from '~/config/booking'
 import { useAvailability } from '~/composables/useAvailability'
 import type { CourtId, PublicBookingOptions } from '~/types/booking'
+import { holidayDates, holidayForDate } from '~/utils/officialHolidays'
 
 function addDays(date: string, amount: number) {
   const next = new Date(`${date}T12:00:00.000Z`)
@@ -50,6 +51,8 @@ const availability = useAvailability()
 
 const timezone = computed(() => options.value?.timezone ?? bookingConfig.defaultTimezone)
 const courts = computed(() => options.value?.courts ?? [])
+const holidays = computed(() => options.value?.holidays ?? [])
+const unavailableDates = computed(() => holidayDates(holidays.value))
 const minDate = computed(() => getBusinessToday(timezone.value))
 const selectedCourt = computed(() => courts.value.find(court => court.id === selectedCourtId.value))
 const visibleSlots = computed(() => availability.slots.value.filter(slot => slot.available))
@@ -84,6 +87,7 @@ function selectCourt(courtId: CourtId) {
 }
 
 function selectDate(date: string) {
+  if (holidayForDate(holidays.value, date)) return
   selectedDate.value = date
 }
 
@@ -248,6 +252,7 @@ onMounted(() => {
           <BookingDatePicker
             v-model="selectedDate"
             :min="minDate"
+            :unavailable-dates="unavailableDates"
           >
             <template #trigger="{ open }">
               <button
@@ -281,12 +286,17 @@ onMounted(() => {
               v-for="day in dateCards"
               :key="day.value"
               type="button"
-              :class="{ 'is-active': selectedDate === day.value }"
+              :disabled="Boolean(holidayForDate(holidays, day.value))"
+              :class="{
+                'is-active': selectedDate === day.value,
+                'is-holiday': Boolean(holidayForDate(holidays, day.value))
+              }"
               :aria-pressed="selectedDate === day.value"
+              :title="holidayForDate(holidays, day.value)?.name"
               @click="selectDate(day.value)"
             >
               <strong>{{ day.weekday }}, {{ day.day }} {{ day.month }}</strong>
-              <span>{{ day.value }}</span>
+              <span>{{ holidayForDate(holidays, day.value)?.name || day.value }}</span>
             </button>
           </div>
         </section>
@@ -313,6 +323,20 @@ onMounted(() => {
             <div>
               <strong>Fillimisht zgjidh daten</strong>
               <span>Terminet e lira do te shfaqen ketu.</span>
+            </div>
+          </div>
+
+          <div
+            v-else-if="availability.holiday.value"
+            class="booking-empty"
+          >
+            <UIcon
+              name="i-lucide-calendar-off"
+              aria-hidden="true"
+            />
+            <div>
+              <strong>Datë e mbyllur</strong>
+              <span>{{ availability.holiday.value.name }} — zgjidh një datë tjetër.</span>
             </div>
           </div>
 
@@ -648,6 +672,19 @@ onMounted(() => {
 .home-date-strip button:hover {
   border-color: rgba(255, 112, 71, 0.72);
   background: #FFF4F0;
+}
+
+.home-date-strip button.is-holiday,
+.home-date-strip button.is-holiday:hover {
+  border-color: rgba(185, 74, 49, 0.24);
+  background: #FFF4F1;
+  color: #9A3D29;
+  cursor: not-allowed;
+  opacity: 0.78;
+}
+
+.home-date-strip button.is-holiday span {
+  color: #B94A31;
 }
 
 .home-date-strip button.is-active {

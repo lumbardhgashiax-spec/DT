@@ -1,10 +1,4 @@
-import type { BookingCheckout, BookingConfirmation, BookingQuote, BookingQuoteRequest, BookingSlot, CreateBookingRequest, PublicBookingOptions } from '~/types/booking'
-
-interface AvailabilityResponse {
-  courtId: string
-  date: string
-  slots: BookingSlot[]
-}
+import type { BookingAvailabilityResponse, BookingCheckout, BookingConfirmation, BookingQuote, BookingQuoteRequest, CreateBookingRequest, PublicBookingOptions } from '~/types/booking'
 
 function usePublicRequestFetch() {
   const requestFetch = useRequestFetch()
@@ -22,7 +16,7 @@ export function usePublicBookingApi() {
 
   return {
     getOptions: () => requestFetch<PublicBookingOptions>('/api/public/booking/options'),
-    getAvailability: (courtId: string, date: string) => requestFetch<AvailabilityResponse>('/api/public/availability', {
+    getAvailability: (courtId: string, date: string) => requestFetch<BookingAvailabilityResponse>('/api/public/availability', {
       query: { courtId, date }
     }),
     getQuote: (payload: BookingQuoteRequest) => requestFetch<BookingQuote>('/api/public/booking/quote', {

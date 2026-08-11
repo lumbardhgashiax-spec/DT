@@ -181,6 +181,15 @@ function registrationError(error: unknown) {
     return payseraDatabaseUnavailable()
   }
 
+  const errorMessage = typeof error.message === 'string' ? error.message : ''
+  if (error.code === 'P0001' && errorMessage.includes('OFFICIAL_HOLIDAY:')) {
+    const holidayName = errorMessage.split('OFFICIAL_HOLIDAY:')[1]?.trim() || 'festë zyrtare'
+    return createError({
+      statusCode: 409,
+      message: `Kjo datë është bllokuar për festën “${holidayName}”. Zgjidh një datë tjetër.`
+    })
+  }
+
   if (error.code === '23P01') {
     return createError({
       statusCode: 409,

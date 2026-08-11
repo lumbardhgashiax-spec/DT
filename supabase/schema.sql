@@ -92,7 +92,21 @@ create table public.seasons (
   )
 );
 
--- 7. Cmimet sipas sezonit, llojit te fushes dhe nxemjes
+-- 7. Festat zyrtare qe bllokojne rezervimet publike
+create table public.official_holidays (
+  id uuid primary key default gen_random_uuid(),
+  name text not null check (char_length(trim(name)) between 2 and 100),
+  starts_on date not null,
+  ends_on date not null,
+  notes text check (notes is null or char_length(notes) <= 500),
+  is_active boolean not null default true,
+  created_by uuid references public.profiles(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  check (ends_on >= starts_on and ends_on - starts_on <= 30)
+);
+
+-- 8. Cmimet sipas sezonit, llojit te fushes dhe nxemjes
 create table public.price_rules (
   id uuid primary key default gen_random_uuid(),
   season_id uuid not null references public.seasons(id) on delete restrict,
@@ -109,7 +123,7 @@ create table public.price_rules (
   check (court_type = 'indoor' or with_heating = false)
 );
 
--- 8. Rezervimet
+-- 9. Rezervimet
 create table public.reservations (
   id uuid primary key default gen_random_uuid(),
   booking_reference text not null unique,

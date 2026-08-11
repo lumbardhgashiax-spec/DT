@@ -7,10 +7,12 @@ const props = withDefaults(defineProps<{
   min?: string
   disabled?: boolean
   ariaLabel?: string
+  unavailableDates?: string[]
 }>(), {
   min: '',
   disabled: false,
-  ariaLabel: 'Zgjidh daten e rezervimit'
+  ariaLabel: 'Zgjidh daten e rezervimit',
+  unavailableDates: () => []
 })
 
 const emit = defineEmits<{
@@ -30,6 +32,8 @@ function toCalendarDate(value: string) {
 }
 
 const minimumDate = computed(() => toCalendarDate(props.min) ?? undefined)
+const unavailableDateSet = computed(() => new Set(props.unavailableDates))
+const isDateUnavailable = (value: DateValue) => unavailableDateSet.value.has(value.toString())
 const calendarDate = computed<DateValue | null>({
   get: () => toCalendarDate(props.modelValue),
   set(value) {
@@ -82,6 +86,7 @@ const calendarUi = {
         <UCalendar
           v-model="calendarDate"
           :min-value="minimumDate"
+          :is-date-unavailable="isDateUnavailable"
           :default-placeholder="calendarDate || minimumDate"
           :week-starts-on="1"
           :ui="calendarUi"
@@ -133,6 +138,13 @@ const calendarUi = {
 .booking-date-picker :deep([data-outside-view]),
 .booking-date-picker :deep([data-disabled]) {
   color: #98A29F;
+}
+
+.booking-date-picker :deep([data-unavailable]) {
+  background: #FFF4F1;
+  color: #B94A31;
+  text-decoration: line-through;
+  cursor: not-allowed;
 }
 
 @media (max-width: 390px) {

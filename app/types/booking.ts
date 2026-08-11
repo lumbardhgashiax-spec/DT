@@ -24,6 +24,13 @@ export interface BookingOpeningHours {
   end: string
 }
 
+export interface BookingHoliday {
+  id: string
+  name: string
+  startsOn: string
+  endsOn: string
+}
+
 export interface PublicBookingOptions {
   timezone: string
   openingHours: BookingOpeningHours
@@ -35,6 +42,7 @@ export interface PublicBookingOptions {
   }
   courts: BookingCourt[]
   extraServices: BookingExtraService[]
+  holidays: BookingHoliday[]
 }
 
 export interface BookingSlot {
@@ -42,6 +50,13 @@ export interface BookingSlot {
   date: string
   time: string
   available: boolean
+}
+
+export interface BookingAvailabilityResponse {
+  courtId: CourtId
+  date: string
+  slots: BookingSlot[]
+  holiday: BookingHoliday | null
 }
 
 export interface BookingQuoteRequest {

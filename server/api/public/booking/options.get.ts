@@ -1,5 +1,6 @@
 import {
   ACADEMY_TIME_ZONE,
+  academyDateFromIso,
   PUBLIC_CLOSING_HOUR,
   PUBLIC_DURATION_MINUTES,
   PUBLIC_OPENING_HOUR,
@@ -8,6 +9,7 @@ import {
   setPublicResponseHeaders
 } from '../../../utils/publicBooking'
 import { listPublicCourts, listPublicExtraServices } from '../../../utils/publicCourts'
+import { listPublicOfficialHolidays } from '../../../utils/officialHolidays'
 import { isPayseraDatabaseReady } from '../../../utils/publicCheckout'
 import {
   isPayseraCheckoutConfigured,
@@ -24,9 +26,10 @@ export default defineEventHandler(async (event) => {
   enforcePublicRateLimit(event, 'courts')
 
   const client = await requirePublicBookingService(event)
-  const [courts, extraServices, payseraDatabaseReady] = await Promise.all([
+  const [courts, extraServices, holidays, payseraDatabaseReady] = await Promise.all([
     listPublicCourts(client, false),
     listPublicExtraServices(client),
+    listPublicOfficialHolidays(client, academyDateFromIso(new Date().toISOString())),
     isPayseraDatabaseReady(client)
   ])
   const payseraConfigured = isPayseraCheckoutConfigured(event)
@@ -52,6 +55,7 @@ export default defineEventHandler(async (event) => {
       courtType: court.courtType,
       imageUrl: court.imageUrl
     })),
-    extraServices
+    extraServices,
+    holidays
   }
 })
